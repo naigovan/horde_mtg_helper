@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}{{ game.name }} | MTG Horde Assistant{% endblock %}
+{% block content %}
+<div class="game-page" data-game-page>
+<section class="card stack">
+  <a href="/decks/{{ game.deck_definition_id }}">Back to deck</a>
+  <div class="toolbar">
+    <div class="metric"><span>Library</span><strong>{{ game.library_order|length }}</strong></div>
+    <div class="metric"><span>Turn</span><strong>{{ game.turn_number }}</strong></div>
+  </div>
+  <div class="action-grid page-actions">
+    <form method="post" action="/games/{{ game.id }}/turn"><button type="submit">Turn</button></form>
+    <form method="post" action="/games/{{ game.id }}/shuffle"><button type="submit">Shuffle</button></form>
+    <form method="post" action="/games/{{ game.id }}/untap-all"><button type="submit">Untap All</button></form>
+    <form method="post" action="/games/{{ game.id }}/clear-rested"><button type="submit">Clear Tired</button></form>
+    <form method="post" action="/games/{{ game.id }}/save"><button type="submit">Save Game</button></form>
+    <form method="post" action="/games/{{ game.id }}/undo"><button type="submit">Undo Last Action</button></form>
+    <form method="post" action="/games/{{ game.id }}/delete"><button type="submit">Delete Game</button></form>
+  </div>
+  <div class="action-grid page-actions page-actions-compact">
+    <form method="post" action="/games/{{ game.id }}/mill">
+      <input type="hidden" name="count" value="1" />
+      <button type="submit">Mill</button>
+    </form>
+  </div>
+</section>
+
+<section class="card stack">
+  <h2>Library Tokens</h2>
+  {% if library_tokens %}
+  <ul class="zone-list">
+    {% for item in library_tokens %}
+    <li class="zone-entry token-entry">
+      <div class="zone-entry-row">
+        <strong>{{ item.card.card_name }}</strong>
+        <span>{{ item.card.type_line or "" }}</span>
+      </div>
+      <div class="token-entry-meta">
+        <span class="token-count">x{{ item.count }}</span>
+        <form method="post" action="/games/{{ game.id }}/cards/{{ item.card.id }}/move">
+          <input type="hidden" name="destination" value="battlefield" />
+          <button type="submit">Place Token</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No token cards currently in the library.</p>
+  {% endif %}
+</section>
+
+<section class="card stack">
+  <h2>Battlefield</h2>
+  {% if battlefield %}
+  <div class="card-grid">
+    {% for card in battlefield %}
+    <article class="battle-card {% if card.tapped %}is-tapped{% endif %} {% if card.phased_out %}is-phased{% endif %}">
+      {% if card.image_url %}
+      <div class="battle-card-image">
+        <img src="{{ card.image_url }}" alt="{{ card.card_name }}" />
+      </div>
+      {% endif %}
+      <div class="battle-card-body">
+        <h3>{{ card.card_name }}</h3>
+        <p>{{ card.type_line or "" }}</p>
+        <p class="status-line">
+          {% if card.rested %}<span>Tired</span>{% endif %}
+          {% if card.is_creature %}<span>Haste</span><span>Goaded</span>{% endif %}
+        </p>
+        <p class="oracle-text">{{ card.oracle_text or "No oracle text available." }}</p>
+        <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/note" class="note-form">
+          <input
+            type="text"
+            name="note"
+            maxlength="10"
+            value="{{ card.notes or '' }}"
+            placeholder="note"
+            class="note-input"
+          />
+          <button type="submit">Save Note</button>
+        </form>
+        <div class="action-grid card-actions">
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle"><input type="hidden" name="flag_name" value="tapped" /><button type="submit">{% if card.tapped %}Untap{% else %}Tap{% endif %}</button></form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle"><input type="hidden" name="flag_name" value="rested" /><button type="submit">Tired</button></form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle"><input type="hidden" name="flag_name" value="phased_out" /><button type="submit">{% if card.phased_out %}Phase In{% else %}Phase Out{% endif %}</button></form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Graveyard</button></form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move"><input type="hidden" name="destination" value="library" /><button type="submit">Top of Library</button></form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom"><button type="submit">Bottom</button></form>
+          {% if card.is_commander %}
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move"><input type="hidden" name="destination" value="commander" /><button type="submit">Commander</button></form>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>No Horde permanents on the battlefield.</p>
+  {% endif %}
+</section>
+
+<section class="layout-two">
+  <section class="card stack">
+    <h2>Commander Zone</h2>
+    <ul class="zone-list">
+      {% for card in commander %}
+      <li class="zone-entry">
+        <div class="zone-entry-row">
+          <strong>{{ card.card_name }}</strong>
+          <span>{{ card.type_line or "" }}</span>
+        </div>
+        <div class="action-grid zone-actions">
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="battlefield" />
+            <button type="submit">Battlefield</button>
+          </form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="graveyard" />
+            <button type="submit">Graveyard</button>
+          </form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="exile" />
+            <button type="submit">Exile</button>
+          </form>
+        </div>
+      </li>
+      {% else %}
+      <li>Empty</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section class="card stack">
+    <h2>Graveyard</h2>
+    <ul class="zone-list">
+      {% for card in graveyard %}
+      <li class="zone-entry">
+        <div class="zone-entry-row">
+          <strong>{{ card.card_name }}</strong>
+          <span>{{ card.type_line or "" }}</span>
+        </div>
+        <div class="action-grid zone-actions">
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="library" />
+            <button type="submit">Top</button>
+          </form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom">
+            <button type="submit">Bottom</button>
+          </form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="battlefield" />
+            <button type="submit">Battlefield</button>
+          </form>
+          {% if card.is_commander %}
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="commander" />
+            <button type="submit">Commander</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="exile" />
+            <button type="submit">Exile</button>
+          </form>
+        </div>
+      </li>
+      {% else %}
+      <li>Empty</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section class="card stack">
+    <h2>Exile</h2>
+    <ul class="zone-list">
+      {% for card in exile %}
+      <li class="zone-entry">
+        <div class="zone-entry-row">
+          <strong>{{ card.card_name }}</strong>
+          <span>{{ card.type_line or "" }}</span>
+        </div>
+        <div class="action-grid zone-actions">
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="graveyard" />
+            <button type="submit">Graveyard</button>
+          </form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="battlefield" />
+            <button type="submit">Battlefield</button>
+          </form>
+          {% if card.is_commander %}
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="commander" />
+            <button type="submit">Commander</button>
+          </form>
+          {% endif %}
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move">
+            <input type="hidden" name="destination" value="library" />
+            <button type="submit">Top</button>
+          </form>
+          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom">
+            <button type="submit">Bottom</button>
+          </form>
+        </div>
+      </li>
+      {% else %}
+      <li>Empty</li>
+      {% endfor %}
+    </ul>
+  </section>
+</section>
+
+<section class="card stack">
+  <h2>Action log</h2>
+  <ul class="zone-list">
+    {% for entry in game.action_logs|reverse %}
+    <li>{{ entry.created_at.strftime("%Y-%m-%d %H:%M:%S") }} · {{ entry.message }}</li>
+    {% else %}
+    <li>No logged actions.</li>
+    {% endfor %}
+  </ul>
+</section>
+</div>
+{% endblock %}

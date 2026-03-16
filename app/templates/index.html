@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Decks | MTG Horde Assistant{% endblock %}
+{% block content %}
+<section class="hero card">
+  <div>
+    <p class="eyebrow">MVP</p>
+    <h1>Build and run a Horde deck locally</h1>
+    <p>Paste a decklist, cache cards from Scryfall, then start a saved Horde game with simple battlefield controls.</p>
+  </div>
+</section>
+
+<section class="layout-two">
+  <form class="card stack" method="post" action="/decks">
+    <h2>Create deck</h2>
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+    <label>Name</label>
+    <input type="text" name="name" value="{{ name or '' }}" placeholder="Zombie Horde" required />
+    <label>Commander (optional)</label>
+    <input type="text" name="commander_name" value="{{ commander_name or '' }}" placeholder="The Scarab God" />
+    <label>Decklist</label>
+    <textarea name="decklist_text" rows="12" placeholder="4 Gravecrawler&#10;2 Dark Ritual" required>{{ decklist_text or '' }}</textarea>
+    <button type="submit">Parse, Resolve, and Save</button>
+  </form>
+
+  <section class="card stack">
+    <h2>Saved decks</h2>
+    {% if decks %}
+      {% for deck in decks %}
+      <a class="deck-link" href="/decks/{{ deck.id }}">
+        <strong>{{ deck.name }}</strong>
+        <span>{{ deck_card_counts.get(deck.id, 0) }} cards</span>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p>No saved decks yet.</p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

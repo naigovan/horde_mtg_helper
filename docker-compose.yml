@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    container_name: mtg-horde-web
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////app/data/horde.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ deck.name }} | MTG Horde Assistant{% endblock %}
+{% block content %}
+<section class="card stack">
+  <a href="/decks/{{ deck.id }}">Back to deck</a>
+  <h1>Edit deck</h1>
+  {% if error %}
+  <p class="error">{{ error }}</p>
+  {% endif %}
+  <form class="stack" method="post" action="/decks/{{ deck.id }}/edit">
+    <label>Name</label>
+    <input type="text" name="name" value="{{ deck.name }}" required />
+    <label>Commander (optional)</label>
+    <input type="text" name="commander_name" value="{{ deck.commander_name or '' }}" placeholder="The Scarab God" />
+    <label>Decklist</label>
+    <textarea name="decklist_text" rows="14" required>{{ deck.decklist_text }}</textarea>
+    <button type="submit">Save Deck</button>
+  </form>
+</section>
+{% endblock %}

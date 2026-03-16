@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ deck.name }} | MTG Horde Assistant{% endblock %}
+{% block content %}
+<section class="card stack">
+  <a href="/">Back to decks</a>
+  <h1>{{ deck.name }}</h1>
+  <p>{{ deck_card_count }} total cards</p>
+  {% if deck.commander_name %}
+  <p>Commander: {{ deck.commander_name }}</p>
+  {% endif %}
+  <a class="button-link" href="/decks/{{ deck.id }}/edit">Edit Deck</a>
+  <form method="post" action="/decks/{{ deck.id }}/delete">
+    <button type="submit">Delete Deck</button>
+  </form>
+</section>
+
+<section class="layout-two">
+  <form class="card stack" method="post" action="/games/from-deck/{{ deck.id }}">
+    <h2>Start new game</h2>
+    <label>Game name</label>
+    <input type="text" name="name" value="{{ deck.name }} Game" />
+    <label class="check"><input type="checkbox" name="legendary_damage_mill_to_phased" /> Legendary milled by damage may enter phased out</label>
+    <button type="submit">Start Game</button>
+  </form>
+
+  <section class="card stack">
+    <h2>Saved games</h2>
+    {% if deck.games %}
+      {% for game in deck.games|sort(attribute="created_at", reverse=True) %}
+      <div class="deck-link deck-link-actions">
+        <a href="/games/{{ game.id }}">
+          <strong>{{ game.name }}</strong>
+          <span>Turn {{ game.turn_number }}</span>
+        </a>
+        <form method="post" action="/games/{{ game.id }}/delete">
+          <button type="submit">Delete Game</button>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p>No games started from this deck yet.</p>
+    {% endif %}
+  </section>
+</section>
+
+<section class="card stack">
+  <h2>Decklist</h2>
+  <pre class="decklist">{{ deck.decklist_text }}</pre>
+</section>
+{% endblock %}
