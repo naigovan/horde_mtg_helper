@@ -11,8 +11,8 @@
   <div class="action-grid page-actions">
     <form method="post" action="/games/{{ game.id }}/turn"><button type="submit">Turn</button></form>
     <form method="post" action="/games/{{ game.id }}/shuffle"><button type="submit">Shuffle</button></form>
+    <form method="post" action="/games/{{ game.id }}/tap-all"><button type="submit">Tap All</button></form>
     <form method="post" action="/games/{{ game.id }}/untap-all"><button type="submit">Untap All</button></form>
-    <form method="post" action="/games/{{ game.id }}/clear-rested"><button type="submit">Clear Tired</button></form>
     <form method="post" action="/games/{{ game.id }}/save"><button type="submit">Save Game</button></form>
     <form method="post" action="/games/{{ game.id }}/undo"><button type="submit">Undo Last Action</button></form>
     <form method="post" action="/games/{{ game.id }}/delete"><button type="submit">Delete Game</button></form>
@@ -20,7 +20,11 @@
   <div class="action-grid page-actions page-actions-compact">
     <form method="post" action="/games/{{ game.id }}/mill">
       <input type="hidden" name="count" value="1" />
-      <button type="submit">Mill</button>
+      <button type="submit">Mill 1</button>
+    </form>
+    <form method="post" action="/games/{{ game.id }}/mill" class="inline-mill-form">
+      <input type="number" name="count" value="3" min="1" step="1" class="mill-count-input" />
+      <button type="submit">Mill N</button>
     </form>
   </div>
 </section>
@@ -65,7 +69,6 @@
         <h3>{{ card.card_name }}</h3>
         <p>{{ card.type_line or "" }}</p>
         <p class="status-line">
-          {% if card.rested %}<span>Tired</span>{% endif %}
           {% if card.is_creature %}<span>Haste</span><span>Goaded</span>{% endif %}
         </p>
         <p class="oracle-text">{{ card.oracle_text or "No oracle text available." }}</p>
@@ -82,7 +85,6 @@
         </form>
         <div class="action-grid card-actions">
           <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle"><input type="hidden" name="flag_name" value="tapped" /><button type="submit">{% if card.tapped %}Untap{% else %}Tap{% endif %}</button></form>
-          <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle"><input type="hidden" name="flag_name" value="rested" /><button type="submit">Tired</button></form>
           <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle"><input type="hidden" name="flag_name" value="phased_out" /><button type="submit">{% if card.phased_out %}Phase In{% else %}Phase Out{% endif %}</button></form>
           <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Graveyard</button></form>
           <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>

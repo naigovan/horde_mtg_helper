@@ -9,6 +9,7 @@ from app.game_engine import (
     move_card,
     restore_snapshot,
     snapshot_game,
+    tap_all,
     take_turn,
 )
 from app.models import CardCatalogEntry, CardInstance, DeckDefinition, GameState
@@ -231,3 +232,25 @@ def test_move_card_to_library_bottom_appends_to_library():
     assert game.library_order == [10, 11, 3]
     assert game.battlefield_ids == []
     assert moved_card.current_zone == ZONE_LIBRARY
+
+
+def test_tap_all_taps_all_battlefield_cards():
+    game = GameState(
+        id=1,
+        deck_definition_id=1,
+        library_order=[],
+        battlefield_ids=[1, 2],
+        graveyard_ids=[],
+        exile_ids=[],
+        wave_pending_ids=[],
+    )
+    card_one = make_card(1, "Zombie One", type_line="Creature - Zombie")
+    card_one.current_zone = ZONE_BATTLEFIELD
+    card_two = make_card(2, "Zombie Two", type_line="Creature - Zombie")
+    card_two.current_zone = ZONE_BATTLEFIELD
+    game.card_instances = [card_one, card_two]
+
+    tap_all(DummySession(), game)
+
+    assert card_one.tapped is True
+    assert card_two.tapped is True

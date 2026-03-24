@@ -190,6 +190,15 @@ def untap_all(session: Session, game: GameState) -> None:
     _log_action(session, game, "untap_all", "Untapped all battlefield cards.", before)
 
 
+def tap_all(session: Session, game: GameState) -> None:
+    """Tap all battlefield permanents."""
+    before = snapshot_game(session, game)
+    for card in game.card_instances:
+        if card.current_zone == ZONE_BATTLEFIELD:
+            card.tapped = True
+    _log_action(session, game, "tap_all", "Tapped all battlefield cards.", before)
+
+
 def clear_rested(session: Session, game: GameState) -> None:
     """Clear rested markers from the battlefield."""
     before = snapshot_game(session, game)

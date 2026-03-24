@@ -19,6 +19,7 @@ from app.game_engine import (
     move_card_to_zone,
     save_game,
     shuffle_library,
+    tap_all,
     take_turn,
     toggle_flag,
     undo_last_action,
@@ -115,6 +116,14 @@ def mill_action(game_id: int, count: int = Form(...), as_damage: bool = Form(Fal
 def untap_all_action(game_id: int, session: Session = Depends(get_session)):
     game = _load_game(session, game_id)
     untap_all(session, game)
+    session.commit()
+    return RedirectResponse(url=f"/games/{game.id}", status_code=303)
+
+
+@router.post("/{game_id}/tap-all")
+def tap_all_action(game_id: int, session: Session = Depends(get_session)):
+    game = _load_game(session, game_id)
+    tap_all(session, game)
     session.commit()
     return RedirectResponse(url=f"/games/{game.id}", status_code=303)
 
