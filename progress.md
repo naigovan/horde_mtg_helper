@@ -1,0 +1,37 @@
+Original prompt: Build and iterate a playable web game in this workspace, validating changes with a Playwright loop. ok so my game functionality is good for me but i need it to look and feel like a game, rather than a web 1.0 website with buttons. I want animations for cards moving from library to battlefield, graveyard, exile, back to library. smooth rotations for tap/untap actions (exept for tap all/untap/all) can you do that?
+
+2026-03-24
+- Inspected current game UI in `app/templates/game_detail.html`, `app/static/app.js`, and `app/static/styles.css`.
+- Found existing behavior uses fetch + DOM replacement for POST actions, which is a good base for DOM-to-DOM transition animations.
+- Confirmed there was no prior `progress.md`.
+- Next: add stable card/zone metadata, visual redesign, movement animation layer, smoother tap/untap transitions, and Playwright hooks.
+- Added `game_view_state` serialization in `app/routes/games.py` so the frontend can compare pre/post card zones and expose a concise `render_game_to_text`.
+- Rebuilt `app/templates/game_detail.html` into a more game-like tabletop layout with stable `data-card-id` and `data-zone-anchor` hooks for animation.
+- Replaced `app/static/app.js` with a transition system that animates visible card moves, library-to-zone arrivals, zone-to-library departures, and single-card tap/untap rotations while leaving tap-all/untap-all instant.
+- Reworked `app/static/styles.css` to give the page a table-surface presentation with stronger zone framing and card-piece styling.
+- Installed Node + Playwright prerequisites, exposed the page through `uvicorn`, and ran the shared `$develop-web-game` Playwright client against `/games/2` and `/games/3`.
+- Added `data-card-action` hooks and zone `id` anchors to make browser targeting more reliable.
+- Shared Playwright client successfully validated page rendering, `Turn`, and at least one real tap action with screenshots/state output in `output/web-game-*`.
+- A deeper direct Playwright sequence validated tap, untap, exile, exile->battlefield, graveyard, graveyard->battlefield, and battlefield->library on a throwaway game. Artifacts live in `output/game3-sequence/`.
+- `render_game_to_text` matched the visual state through the tested transitions, and no console/page errors were recorded.
+- Cleanup: deleted the throwaway validation game and restored game 2 back to its pre-test visible state (Gray Merchant returned to the top of the library, untapped).
+- Visual note for a future pass: tapped cards currently overlap their control area on desktop in a dramatic way that still works, but could be refined further if an even cleaner “board piece” presentation is wanted.
+- Follow-up tweak: compacted battlefield cards and tightened the battlefield grid so desktop now fits up to 5 permanents in one row.
+- Verified with a fresh temporary game and Playwright screenshot/state capture in `output/game4-row-check-2/`; 5 battlefield permanents rendered in a single row with no console errors.
+- Cleanup: deleted the temporary row-check game after validation.
+- Follow-up tweak: widened the overall table layout (`.page-shell` and `.tabletop-stage`) and scaled battlefield cards/art back up so card images are easier to read.
+- Verified with a 1600px-wide Playwright screenshot in `output/game4-width-check.png`; battlefield card art is noticeably larger while still keeping 5 permanents in one row at that width.
+- Cleanup: deleted the temporary width-check game after validation.
+- Follow-up tweak: set `.battle-card` to a minimum width of `240px` and upscaled `.battle-card-stage-wrap`, `.battle-card-shell`, `.battle-card-art`, and `.battle-card-overlay` proportions to match.
+- Also gave the battlefield column a bit more room by narrowing the library column and slightly increasing `.battlefield-stage` padding.
+- Verified with a fresh 1600px-wide browser screenshot in `output/game4-card-width-check.png`; the battlefield tiles are now much larger and the art is substantially easier to read.
+- Cleanup: deleted the temporary card-width validation game after verification.
+- User feedback: the previous size pass still felt visually unchanged because `.battle-card-stage-wrap` and the fixed shell width were still constraining the art area.
+- Reworked battlefield cards so `battle-card-stage-wrap` is removed entirely, `.battle-card-shell` now spans the full card tile width, and tap/untap rotates only `.battle-card-art` instead of the full shell.
+- Verified with browser screenshots in `output/game4-art-rotation-before.png` and `output/game4-art-rotation-after.png`; battlefield art is visibly larger and tapped state rotates just the art while the rest of the card stays readable.
+- Cleanup: deleted the temporary validation game after the screenshot pass.
+- Further user feedback: `.battle-card-shell` still existed in the DOM and was still acting as an unnecessary size constraint.
+- Removed `.battle-card-shell` and `.battle-card-overlay` from the markup entirely. The title/type/status/note block now lives inside `.battle-card-controls` above the oracle text.
+- Harmonized battlefield card colors so the art frame, text, pills, and card surface all sit in the same green/cream/gold palette.
+- Verified with `output/game4-no-shell-before.png` and `output/game4-no-shell-dom.json`; DOM check shows `"shellCount": 0` and `"overlayCount": 0`.
+- Cleanup: deleted the temporary no-shell validation game after verification.

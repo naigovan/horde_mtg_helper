@@ -30,6 +30,13 @@ from app.models import DeckDefinition, GameState
 
 router = APIRouter(prefix="/games")
 templates = Jinja2Templates(directory="app/templates")
+VISIBLE_ZONE_ORDER = {
+    "library": 0,
+    "battlefield": 1,
+    "graveyard": 2,
+    "exile": 3,
+    "commander": 4,
+}
 
 
 @router.post("/from-deck/{deck_id}")
@@ -84,6 +91,7 @@ def view_game(game_id: int, request: Request, session: Session = Depends(get_ses
             "exile": sorted(exile, key=lambda c: c.zone_position),
             "commander": sorted(commander, key=lambda c: c.zone_position),
             "library_tokens": library_tokens,
+            "game_view_state": _build_game_view_state(game),
         },
     )
 
@@ -214,3 +222,58 @@ def _load_game(session: Session, game_id: int) -> GameState:
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     return game
+
+
+def _build_game_view_state(game: GameState) -> dict:
+    """Provide a compact but complete card + zone snapshot for UI animation and tests."""
+
+    library_ids = list(game.library_order or [])
+    battlefield_ids = list(game.battlefield_ids or [])
+    graveyard_ids = list(game.graveyard_ids or [])
+    exile_ids = list(game.exile_ids or [])
+    commander_ids = list(game.commander_ids or [])
+    cards = sorted(
+        game.card_instances,
+        key=lambda card: (
+            VISIBLE_ZONE_ORDER.get(card.current_zone, 99),
+            card.zone_position,
+            card.id,
+        ),
+    )
+    return {
+        "gameId": game.id,
+        "name": game.name,
+        "turn": game.turn_number,
+        "wave": game.wave_number,
+        "latestAction": game.action_logs[-1].message if game.action_logs else None,
+        "counts": {
+            "library": len(library_ids),
+            "battlefield": len(battlefield_ids),
+            "graveyard": len(graveyard_ids),
+            "exile": len(exile_ids),
+            "commander": len(commander_ids),
+        },
+        "zones": {
+            "library": library_ids,
+            "battlefield": battlefield_ids,
+            "graveyard": graveyard_ids,
+            "exile": exile_ids,
+            "commander": commander_ids,
+        },
+        "cards": [
+            {
+                "id": card.id,
+                "name": card.card_name,
+                "zone": card.current_zone,
+                "zonePosition": card.zone_position,
+                "tapped": card.tapped,
+                "phasedOut": card.phased_out,
+                "isCommander": card.is_commander,
+                "isCreature": card.is_creature,
+                "isToken": card.is_token,
+                "typeLine": card.type_line or "",
+                "note": card.notes or "",
+            }
+            for card in cards
+        ],
+    }
