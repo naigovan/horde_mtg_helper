@@ -112,6 +112,7 @@ class GameState(TimestampMixin, Base):
     exile_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
     commander_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
     wave_pending_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    battlefield_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     deck_definition: Mapped["DeckDefinition"] = relationship(back_populates="games")

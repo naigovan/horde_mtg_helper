@@ -1,20 +1,66 @@
 {% extends "base.html" %}
 {% block title %}Edit {{ deck.name }} | MTG Horde Assistant{% endblock %}
 {% block content %}
-<section class="card stack">
-  <a href="/decks/{{ deck.id }}">Back to deck</a>
-  <h1>Edit deck</h1>
-  {% if error %}
-  <p class="error">{{ error }}</p>
-  {% endif %}
-  <form class="stack" method="post" action="/decks/{{ deck.id }}/edit">
-    <label>Name</label>
-    <input type="text" name="name" value="{{ deck.name }}" required />
-    <label>Commander (optional)</label>
-    <input type="text" name="commander_name" value="{{ deck.commander_name or '' }}" placeholder="The Scarab God" />
-    <label>Decklist</label>
-    <textarea name="decklist_text" rows="14" required>{{ deck.decklist_text }}</textarea>
-    <button type="submit">Save Deck</button>
-  </form>
-</section>
+<div class="app-page">
+  <section class="card app-hero">
+    <div class="app-hero-grid">
+      <div class="app-hero-copy">
+        <a class="app-back-link" href="/decks/{{ deck.id }}">Back to deck</a>
+        <p class="eyebrow">Deck Workshop</p>
+        <h1>Edit {{ deck.name }}</h1>
+        <p class="app-subtitle">Refine the list in the same design system as the game board, so setup and play feel like one continuous workspace.</p>
+        <div class="app-chip-row">
+          <span class="app-chip">{% if deck.commander_name %}Commander set{% else %}Commander optional{% endif %}</span>
+          <span class="app-chip">Deck editing</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="app-grid app-grid-edit">
+    <section class="card app-panel app-form-panel app-form-shell">
+      <header class="app-panel-header">
+        <p class="eyebrow">Deck Editor</p>
+        <h2>Update the saved list</h2>
+        <p>Change the name, commander, or full decklist here. Existing games stay as their own saved board states.</p>
+      </header>
+
+      {% if error %}
+      <p class="error">{{ error }}</p>
+      {% endif %}
+
+      <form class="app-form" method="post" action="/decks/{{ deck.id }}/edit">
+        <label class="app-field">
+          <span>Name</span>
+          <input type="text" name="name" value="{{ deck.name }}" required />
+        </label>
+
+        <label class="app-field">
+          <span>Commander (optional)</span>
+          <input type="text" name="commander_name" value="{{ deck.commander_name or '' }}" placeholder="The Scarab God" />
+        </label>
+
+        <label class="app-field">
+          <span>Decklist</span>
+          <textarea name="decklist_text" rows="14" required>{{ deck.decklist_text }}</textarea>
+        </label>
+
+        <button type="submit">Save Deck</button>
+      </form>
+    </section>
+
+    <aside class="card app-panel app-side-panel">
+      <header class="app-panel-header">
+        <p class="eyebrow">Editing Notes</p>
+        <h2>Keep the list tidy</h2>
+      </header>
+
+      <ul class="app-note-list">
+        <li>Use one card entry per line with an optional quantity prefix.</li>
+        <li>Commander is optional, but adding one makes the deck detail page feel more complete.</li>
+        <li>Saved games remain playable even after you update the source deck.</li>
+      </ul>
+    </aside>
+  </section>
+</div>
 {% endblock %}

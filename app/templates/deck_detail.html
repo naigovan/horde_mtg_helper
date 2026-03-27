@@ -1,50 +1,87 @@
 {% extends "base.html" %}
 {% block title %}{{ deck.name }} | MTG Horde Assistant{% endblock %}
 {% block content %}
-<section class="card stack">
-  <a href="/">Back to decks</a>
-  <h1>{{ deck.name }}</h1>
-  <p>{{ deck_card_count }} total cards</p>
-  {% if deck.commander_name %}
-  <p>Commander: {{ deck.commander_name }}</p>
-  {% endif %}
-  <a class="button-link" href="/decks/{{ deck.id }}/edit">Edit Deck</a>
-  <form method="post" action="/decks/{{ deck.id }}/delete">
-    <button type="submit">Delete Deck</button>
-  </form>
-</section>
+<div class="app-page">
+  <section class="card app-hero">
+    <div class="app-hero-grid">
+      <div class="app-hero-copy">
+        <a class="app-back-link" href="/">Back to decks</a>
+        <p class="eyebrow">Deck Hangar</p>
+        <h1>{{ deck.name }}</h1>
+        <p class="app-subtitle">Manage this Horde deck, launch new table states, and keep its saved games in the same tabletop visual language as the live game screen.</p>
+        <div class="app-chip-row">
+          <span class="app-chip">{{ deck_card_count }} cards</span>
+          <span class="app-chip">{{ deck.games|length }} saved games</span>
+          <span class="app-chip">{% if deck.commander_name %}Commander ready{% else %}No commander{% endif %}</span>
+        </div>
+      </div>
 
-<section class="layout-two">
-  <form class="card stack" method="post" action="/games/from-deck/{{ deck.id }}">
-    <h2>Start new game</h2>
-    <label>Game name</label>
-    <input type="text" name="name" value="{{ deck.name }} Game" />
-    <label class="check"><input type="checkbox" name="legendary_damage_mill_to_phased" /> Legendary milled by damage may enter phased out</label>
-    <button type="submit">Start Game</button>
-  </form>
-
-  <section class="card stack">
-    <h2>Saved games</h2>
-    {% if deck.games %}
-      {% for game in deck.games|sort(attribute="created_at", reverse=True) %}
-      <div class="deck-link deck-link-actions">
-        <a href="/games/{{ game.id }}">
-          <strong>{{ game.name }}</strong>
-          <span>Turn {{ game.turn_number }}</span>
-        </a>
-        <form method="post" action="/games/{{ game.id }}/delete">
-          <button type="submit">Delete Game</button>
+      <div class="app-hero-actions">
+        <a class="button-link" href="/decks/{{ deck.id }}/edit">Edit Deck</a>
+        <form method="post" action="/decks/{{ deck.id }}/delete">
+          <button type="submit">Delete Deck</button>
         </form>
       </div>
-      {% endfor %}
-    {% else %}
-      <p>No games started from this deck yet.</p>
-    {% endif %}
+    </div>
   </section>
-</section>
 
-<section class="card stack">
-  <h2>Decklist</h2>
-  <pre class="decklist">{{ deck.decklist_text }}</pre>
-</section>
+  <section class="app-grid app-grid-main">
+    <form class="card app-panel app-form-panel app-form-shell" method="post" action="/games/from-deck/{{ deck.id }}">
+      <header class="app-panel-header">
+        <p class="eyebrow">Launch Game</p>
+        <h2>Start a new Horde run</h2>
+        <p>Create a fresh game state from this list with the same polished board UI you’ve been tuning.</p>
+      </header>
+
+      <div class="app-form">
+        <label class="app-field">
+          <span>Game name</span>
+          <input type="text" name="name" value="{{ deck.name }} Game" />
+        </label>
+
+        <label class="app-checkbox">
+          <input type="checkbox" name="legendary_damage_mill_to_phased" />
+          <span>Legendary creatures milled by damage may enter phased out</span>
+        </label>
+
+        <button type="submit">Start Game</button>
+      </div>
+    </form>
+
+    <section class="card app-panel">
+      <header class="app-panel-header">
+        <p class="eyebrow">Saved Games</p>
+        <h2>Resume an existing table</h2>
+        <p>Jump straight back into a game state or clear out old runs you no longer need.</p>
+      </header>
+
+      {% if deck.games %}
+      <div class="app-game-list">
+        {% for game in deck.games|sort(attribute="created_at", reverse=True) %}
+        <div class="app-game-card">
+          <a class="app-game-card-main" href="/games/{{ game.id }}">
+            <strong>{{ game.name }}</strong>
+            <span>Turn {{ game.turn_number }} · {{ game.status|capitalize }}</span>
+          </a>
+          <form method="post" action="/games/{{ game.id }}/delete">
+            <button type="submit">Delete</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="app-empty">No games started from this deck yet. Launch one from the left when you’re ready.</p>
+      {% endif %}
+    </section>
+  </section>
+
+  <section class="card app-panel">
+    <header class="app-panel-header">
+      <p class="eyebrow">Decklist</p>
+      <h2>Current list</h2>
+      <p>{% if deck.commander_name %}Commander: {{ deck.commander_name }}{% else %}No commander assigned to this deck yet.{% endif %}</p>
+    </header>
+    <pre class="decklist app-decklist">{{ deck.decklist_text }}</pre>
+  </section>
+</div>
 {% endblock %}

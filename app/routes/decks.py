@@ -13,24 +13,18 @@ from app.deck_parser import parse_decklist
 from app.game_engine import make_deck_card_instance
 from app.models import DeckDefinition, GameState
 from app.scryfall_client import ScryfallClient
+from app.template_helpers import register_template_helpers
 
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+register_template_helpers(templates)
 
 
 @router.get("/")
 def home(request: Request, session: Session = Depends(get_session)):
     """Render the home page."""
-    decks = session.scalars(
-        select(DeckDefinition)
-        .options(selectinload(DeckDefinition.card_instances))
-        .order_by(DeckDefinition.created_at.desc())
-    ).all()
-    deck_card_counts = {deck.id: len([card for card in deck.card_instances if card.game_state_id is None]) for deck in decks}
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "decks": decks, "deck_card_counts": deck_card_counts}
-    )
+    return templates.TemplateResponse("index.html", _build_home_context(request, session))
 
 
 @router.post("/decks")
@@ -59,16 +53,17 @@ def create_deck(
         return RedirectResponse(url=f"/decks/{deck.id}", status_code=303)
     except Exception as exc:
         session.rollback()
-        return templates.TemplateResponse(
-            "index.html",
+        context = _build_home_context(request, session)
+        context.update(
             {
-                "request": request,
-                "decks": [],
                 "error": str(exc),
                 "name": name,
                 "decklist_text": decklist_text,
                 "commander_name": commander_name,
-            },
+            }
+        )
+        return templates.TemplateResponse(
+            "index.html", context,
             status_code=400,
         )
 
@@ -171,3 +166,21 @@ def _populate_deck_cards(session: Session, deck: DeckDefinition, decklist_text: 
         commander.is_commander = True
         commander.current_zone = "commander"
         session.add(commander)
+
+
+def _build_home_context(request: Request, session: Session) -> dict:
+    """Shared home-page context for normal loads and create-deck errors."""
+    decks = session.scalars(
+        select(DeckDefinition)
+        .options(selectinload(DeckDefinition.card_instances), selectinload(DeckDefinition.games))
+        .order_by(DeckDefinition.created_at.desc())
+    ).all()
+    deck_card_counts = {deck.id: len([card for card in deck.card_instances if card.game_state_id is None]) for deck in decks}
+    return {
+        "request": request,
+        "decks": decks,
+        "deck_card_counts": deck_card_counts,
+        "saved_game_count": sum(len(deck.games) for deck in decks),
+        "commander_deck_count": sum(1 for deck in decks if deck.commander_name),
+        "total_card_count": sum(deck_card_counts.values()),
+    }

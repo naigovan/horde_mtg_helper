@@ -1,385 +1,441 @@
 {% extends "base.html" %}
 {% block title %}{{ game.name }} | MTG Horde Assistant{% endblock %}
 {% block content %}
-<div class="game-page" data-game-page data-game-id="{{ game.id }}">
-  <section class="card game-hero">
-    <div class="game-hero-top">
-      <div class="stack game-hero-copy">
-        <p class="eyebrow">Active Horde Table</p>
-        <h1>{{ game.name }}</h1>
-        <p class="tagline">Move the Horde across the table, track pressure, and keep the board state readable at a glance.</p>
-      </div>
-      <a class="button-link" href="/decks/{{ game.deck_definition_id }}">Back To Deck</a>
+{% set battlefield_creatures = battlefield | selectattr("is_creature") | list %}
+{% set battlefield_noncreatures = battlefield | rejectattr("is_creature") | list %}
+{% set graveyard_preview = graveyard|last if graveyard else None %}
+{% set exile_preview = exile|last if exile else None %}
+{% set commander_preview = commander|first if commander else None %}
+<div class="game-page board-page" data-game-page data-game-id="{{ game.id }}">
+  <section class="board-topbar card">
+    <div class="board-topbar-copy">
+      <p class="eyebrow">Horde Board</p>
+      <h1>{{ game.name }}</h1>
+      <p class="tagline">Image-first permanents, hover menus, and a docked zone layout built for fast Horde turns.</p>
     </div>
 
-    <div class="toolbar game-metrics">
-      <div class="metric">
-        <span>Library</span>
-        <strong>{{ game.library_order|length }}</strong>
+    <div class="board-topbar-actions">
+      <div class="board-topbar-metrics">
+        <span class="board-chip">Turn {{ game.turn_number }}</span>
+        <span class="board-chip">{{ battlefield|length }} on board</span>
+        <span class="board-chip">{{ graveyard|length }} in graveyard</span>
+        <span class="board-chip">{{ exile|length }} in exile</span>
       </div>
-      <div class="metric">
-        <span>Battlefield</span>
-        <strong>{{ battlefield|length }}</strong>
+      <div class="board-toolbar board-toolbar-system">
+        <a class="button-link board-toolbar-link" href="/decks/{{ game.deck_definition_id }}">Back</a>
+        <form method="post" action="/games/{{ game.id }}/undo"><button type="submit">Undo</button></form>
+        <form method="post" action="/games/{{ game.id }}/save"><button type="submit">Save</button></form>
+        <form method="post" action="/games/{{ game.id }}/delete"><button type="submit">Delete</button></form>
       </div>
-      <div class="metric">
-        <span>Graveyard</span>
-        <strong>{{ graveyard|length }}</strong>
+      <div class="board-toolbar board-toolbar-zone">
+        <form method="post" action="/games/{{ game.id }}/mill">
+          <input type="hidden" name="count" value="1" />
+          <button type="submit">Mill 1</button>
+        </form>
+        <form method="post" action="/games/{{ game.id }}/mill" class="board-toolbar-inline-form">
+          <button type="submit">Mill N</button>
+          <label class="mill-count-label">
+            <span>N =</span>
+            <input type="number" name="count" value="3" min="1" step="1" class="mill-count-input" aria-label="Mill count" />
+          </label>
+        </form>
+        <form method="post" action="/games/{{ game.id }}/shuffle"><button type="submit">Shuffle</button></form>
+        <form method="post" action="/games/{{ game.id }}/tap-all"><button type="submit">Tap All</button></form>
+        <form method="post" action="/games/{{ game.id }}/untap-all"><button type="submit">Untap All</button></form>
       </div>
-      <div class="metric">
-        <span>Exile</span>
-        <strong>{{ exile|length }}</strong>
-      </div>
-      <div class="metric">
-        <span>Turn</span>
-        <strong>{{ game.turn_number }}</strong>
-      </div>
-    </div>
-
-    <div class="action-grid page-actions">
-      <form method="post" action="/games/{{ game.id }}/turn"><button type="submit">Turn</button></form>
-      <form method="post" action="/games/{{ game.id }}/shuffle"><button type="submit">Shuffle</button></form>
-      <form method="post" action="/games/{{ game.id }}/tap-all"><button type="submit">Tap All</button></form>
-      <form method="post" action="/games/{{ game.id }}/untap-all"><button type="submit">Untap All</button></form>
-      <form method="post" action="/games/{{ game.id }}/save"><button type="submit">Save Game</button></form>
-      <form method="post" action="/games/{{ game.id }}/undo"><button type="submit">Undo Last Action</button></form>
-      <form method="post" action="/games/{{ game.id }}/delete"><button type="submit">Delete Game</button></form>
-    </div>
-
-    <div class="action-grid page-actions page-actions-compact">
-      <form method="post" action="/games/{{ game.id }}/mill">
-        <input type="hidden" name="count" value="1" />
-        <button type="submit">Mill 1</button>
-      </form>
-      <form method="post" action="/games/{{ game.id }}/mill" class="inline-mill-form">
-        <input type="number" name="count" value="3" min="1" step="1" class="mill-count-input" />
-        <button type="submit">Mill N</button>
-      </form>
     </div>
   </section>
 
-  <div class="tabletop-stage">
-  <section class="card zone-panel zone-panel-library" data-zone-panel="library" id="library-zone">
-    <div class="zone-panel-header">
-      <div>
-        <p class="eyebrow">Zone 01</p>
-        <h2>Library Vault</h2>
-        <p class="tagline">The Horde stack, token reserves, and the entry point for every reveal.</p>
-      </div>
-      <span class="zone-pill">{{ game.library_order|length }} cards remaining</span>
-    </div>
-
-    <div class="library-layout">
-      <div class="library-pile-wrap">
-        <div class="library-pile" data-zone-anchor="library">
-          <span class="library-card-back library-card-back-three"></span>
-          <span class="library-card-back library-card-back-two"></span>
-          <span class="library-card-back library-card-back-one"></span>
-          <div class="library-pile-core">
-            <span class="eyebrow">Top Of Library</span>
-            <strong>{{ game.library_order|length }}</strong>
-            <span>cards in stack</span>
-          </div>
+  <section class="board-grid">
+    <section class="board-battlefield card" id="battlefield-zone">
+      <div class="board-battlefield-header">
+        <div>
+          <p class="eyebrow">Battlefield</p>
+          <h2>Creatures</h2>
         </div>
+        <span class="zone-pill">{{ battlefield_creatures|length }}</span>
       </div>
 
-      <div class="library-side-panel">
-        <div class="zone-subpanel">
-          <div class="zone-subpanel-header">
-            <h3>Library Tokens</h3>
-            <span>{{ library_tokens|length }} groups</span>
+      <div class="battlefield-stage battlefield-lane" data-zone-anchor="battlefield">
+        <form method="post" action="/games/{{ game.id }}/battlefield-note" class="battlefield-note-form" data-full-reload="true">
+          <div class="battlefield-note-copy">
+            <span class="eyebrow">Creature Board Note</span>
+            <p>Use this for global buffs, debuffs, and reminders affecting all battlefield creatures.</p>
+          </div>
+          <div class="battlefield-note-inputs">
+            <input
+              type="text"
+              name="note"
+              placeholder="all zombies/skeletons get +1/+1"
+              aria-label="Battlefield creature note"
+              value="{{ game.battlefield_note or '' }}"
+            />
+            <button type="submit">Save Note</button>
+          </div>
+        </form>
+        {% if battlefield_creatures %}
+        <div class="battlefield-card-grid">
+          {% for stack in battlefield_creature_stacks %}
+          {% set card = stack.card %}
+          <article
+            class="battle-card {% if card.tapped %}is-tapped{% endif %} {% if card.phased_out %}is-phased{% endif %} {% if stack.count > 1 %}is-stacked{% endif %}"
+            data-card-id="{{ card.id }}"
+            data-stack-key="{{ stack.stack_key }}"
+            data-stack-count="{{ stack.count }}"
+            data-card-node="card"
+            data-card-name="{{ card.card_name }}"
+            data-zone="battlefield"
+            data-tapped="{{ 'true' if card.tapped else 'false' }}"
+            tabindex="0"
+          >
+            <div class="battle-card-art">
+              {% if stack.count > 1 %}
+              <div class="battle-card-stack-layers" aria-hidden="true">
+                {% for _ in stack.stack_layers %}
+                <span class="battle-card-stack-layer {% if card.image_url %}has-image{% endif %}" style="--stack-layer-index: {{ loop.index0 }};{% if card.image_url %} background-image: url('{{ card.image_url }}');{% endif %}"></span>
+                {% endfor %}
+              </div>
+              {% endif %}
+              <div class="battle-card-art-frame" data-menu-trigger>
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.card_name }}" />
+                {% else %}
+                <div class="battle-card-art-placeholder"><span>{{ card.card_name[:1] }}</span></div>
+                {% endif %}
+                {% if stack.count > 1 %}
+                <span class="battle-card-stack-count">{{ stack.count }}</span>
+                {% endif %}
+                <div class="battle-card-counters">
+                  {% if card.tapped %}<span class="battle-card-badge">Tapped</span>{% endif %}
+                  {% if card.phased_out %}<span class="battle-card-badge">Phased</span>{% endif %}
+                  {% if card.notes %}<span class="battle-card-badge battle-card-badge-note">{{ card.notes }}</span>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="battle-card-menu">
+              <div class="battle-card-menu-header">
+                <div>
+                  <strong>{{ card.card_name }}</strong>
+                  <span>{{ card.type_line or "" }}{% if stack.count > 1 %} · Stack of {{ stack.count }}{% endif %}</span>
+                </div>
+              </div>
+              <p class="status-line">
+                {% if stack.count > 1 %}<span>{{ stack.count }} in stack</span>{% endif %}
+                {% if card.is_creature %}<span>Haste</span><span>Goaded</span>{% endif %}
+                {% if card.phased_out %}<span>Phased</span>{% endif %}
+                {% if card.tapped %}<span>Tapped</span>{% endif %}
+              </p>
+              <div class="action-grid battle-card-menu-actions">
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle" data-card-id="{{ card.id }}" data-card-action="toggle-tapped"><input type="hidden" name="flag_name" value="tapped" /><button type="submit">{% if card.tapped %}Untap{% else %}Tap{% endif %}</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle" data-card-id="{{ card.id }}" data-card-action="toggle-phased"><input type="hidden" name="flag_name" value="phased_out" /><button type="submit">{% if card.phased_out %}Phase In{% else %}Phase Out{% endif %}</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Destroy</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Library</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
+                {% if card.is_commander %}
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Commander</button></form>
+                {% endif %}
+              </div>
+              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/note" class="battle-card-menu-note">
+                <input type="text" name="note" maxlength="10" value="{{ card.notes or '' }}" placeholder="note" class="note-input" />
+                <button type="submit">Save Note</button>
+              </form>
+              <p class="oracle-text">{{ card.oracle_text or "No oracle text available." }}</p>
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="board-empty">No creatures on the battlefield.</p>
+        {% endif %}
+      </div>
+
+      <div class="board-battlefield-header board-battlefield-header-secondary">
+        <div>
+          <p class="eyebrow">Battlefield</p>
+          <h2>Noncreatures</h2>
+        </div>
+        <span class="zone-pill">{{ battlefield_noncreatures|length }}</span>
+      </div>
+
+      <div class="battlefield-lane battlefield-lane-secondary">
+        {% if battlefield_noncreatures %}
+        <div class="battlefield-card-grid">
+          {% for stack in battlefield_noncreature_stacks %}
+          {% set card = stack.card %}
+          <article
+            class="battle-card {% if card.tapped %}is-tapped{% endif %} {% if card.phased_out %}is-phased{% endif %} {% if stack.count > 1 %}is-stacked{% endif %}"
+            data-card-id="{{ card.id }}"
+            data-stack-key="{{ stack.stack_key }}"
+            data-stack-count="{{ stack.count }}"
+            data-card-node="card"
+            data-card-name="{{ card.card_name }}"
+            data-zone="battlefield"
+            data-tapped="{{ 'true' if card.tapped else 'false' }}"
+            tabindex="0"
+          >
+            <div class="battle-card-art">
+              {% if stack.count > 1 %}
+              <div class="battle-card-stack-layers" aria-hidden="true">
+                {% for _ in stack.stack_layers %}
+                <span class="battle-card-stack-layer {% if card.image_url %}has-image{% endif %}" style="--stack-layer-index: {{ loop.index0 }};{% if card.image_url %} background-image: url('{{ card.image_url }}');{% endif %}"></span>
+                {% endfor %}
+              </div>
+              {% endif %}
+              <div class="battle-card-art-frame" data-menu-trigger>
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.card_name }}" />
+                {% else %}
+                <div class="battle-card-art-placeholder"><span>{{ card.card_name[:1] }}</span></div>
+                {% endif %}
+                {% if stack.count > 1 %}
+                <span class="battle-card-stack-count">{{ stack.count }}</span>
+                {% endif %}
+                <div class="battle-card-counters">
+                  {% if card.tapped %}<span class="battle-card-badge">Tapped</span>{% endif %}
+                  {% if card.phased_out %}<span class="battle-card-badge">Phased</span>{% endif %}
+                  {% if card.notes %}<span class="battle-card-badge battle-card-badge-note">{{ card.notes }}</span>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="battle-card-menu">
+              <div class="battle-card-menu-header">
+                <div>
+                  <strong>{{ card.card_name }}</strong>
+                  <span>{{ card.type_line or "" }}{% if stack.count > 1 %} · Stack of {{ stack.count }}{% endif %}</span>
+                </div>
+              </div>
+              <p class="status-line">
+                {% if stack.count > 1 %}<span>{{ stack.count }} in stack</span>{% endif %}
+                {% if card.phased_out %}<span>Phased</span>{% endif %}
+                {% if card.tapped %}<span>Tapped</span>{% endif %}
+              </p>
+              <div class="action-grid battle-card-menu-actions">
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle" data-card-id="{{ card.id }}" data-card-action="toggle-tapped"><input type="hidden" name="flag_name" value="tapped" /><button type="submit">{% if card.tapped %}Untap{% else %}Tap{% endif %}</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle" data-card-id="{{ card.id }}" data-card-action="toggle-phased"><input type="hidden" name="flag_name" value="phased_out" /><button type="submit">{% if card.phased_out %}Phase In{% else %}Phase Out{% endif %}</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Graveyard</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Library</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
+                {% if card.is_commander %}
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Commander</button></form>
+                {% endif %}
+              </div>
+              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/note" class="battle-card-menu-note">
+                <input type="text" name="note" maxlength="10" value="{{ card.notes or '' }}" placeholder="note" class="note-input" />
+                <button type="submit">Save Note</button>
+              </form>
+              <p class="oracle-text">{{ card.oracle_text or "No oracle text available." }}</p>
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="board-empty">No noncreatures on the battlefield.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <aside class="board-sidebar">
+      <section class="board-zone-card board-zone-library card" id="library-zone" tabindex="0">
+        <div class="board-zone-card-surface" data-zone-anchor="library" data-menu-trigger>
+          <div class="library-stack-visual">
+            <span class="library-stack-back library-stack-back-three"></span>
+            <span class="library-stack-back library-stack-back-two"></span>
+            <span class="library-stack-back library-stack-back-one"></span>
+          </div>
+          <div class="board-zone-card-copy">
+            <p class="eyebrow">Library</p>
+            <strong>{{ game.library_order|length }}</strong>
+            <span class="board-zone-hint">Hover for token deploy</span>
+          </div>
+          <form method="post" action="/games/{{ game.id }}/turn" class="board-zone-primary-action">
+            <button type="submit">Take Turn</button>
+          </form>
+        </div>
+
+        <div class="zone-hover-panel zone-hover-panel-library">
+          <div class="zone-hover-panel-header">
+            <strong>Library Tokens</strong>
+            <span>{{ game.library_order|length }} cards</span>
           </div>
           {% if library_tokens %}
-          <ul class="zone-list token-list">
+          <div class="zone-hover-list">
             {% for item in library_tokens %}
-            <li class="zone-entry token-entry">
-              <div class="zone-entry-row">
+            <article class="zone-hover-entry">
+              <div>
                 <strong>{{ item.card.card_name }}</strong>
-                <span>{{ item.card.type_line or "" }}</span>
+                <span>{{ item.count }} token{% if item.count != 1 %}s{% endif %}</span>
               </div>
-              <div class="token-entry-meta">
-                <span class="token-count">x{{ item.count }}</span>
-                <form method="post" action="/games/{{ game.id }}/cards/{{ item.card.id }}/move" data-card-id="{{ item.card.id }}" data-card-action="deploy-battlefield">
-                  <input type="hidden" name="destination" value="battlefield" />
-                  <button type="submit">Deploy</button>
-                </form>
-              </div>
-            </li>
+              <form method="post" action="/games/{{ game.id }}/cards/{{ item.card.id }}/move" data-card-id="{{ item.card.id }}" data-card-action="deploy-battlefield">
+                <input type="hidden" name="destination" value="battlefield" />
+                <button type="submit">Deploy</button>
+              </form>
+            </article>
             {% endfor %}
-          </ul>
+          </div>
           {% else %}
-          <p class="zone-empty">No token cards currently in the library.</p>
+          <p class="board-empty board-empty-mini">No library tokens ready to deploy.</p>
           {% endif %}
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <section class="card zone-panel zone-panel-battlefield" data-zone-panel="battlefield" id="battlefield-zone">
-    <div class="zone-panel-header">
-      <div>
-        <p class="eyebrow">Zone 02</p>
-        <h2>Battlefield</h2>
-        <p class="tagline">Live permanents stay front and center with readable status and quick actions.</p>
-      </div>
-      <span class="zone-pill">{{ battlefield|length }} permanents</span>
-    </div>
-
-    <div class="battlefield-stage" data-zone-anchor="battlefield">
-      {% if battlefield %}
-      <div class="card-grid">
-        {% for card in battlefield %}
-        <article
-          class="battle-card {% if card.tapped %}is-tapped{% endif %} {% if card.phased_out %}is-phased{% endif %}"
-          data-card-id="{{ card.id }}"
-          data-card-name="{{ card.card_name }}"
-          data-zone="battlefield"
-          data-tapped="{{ 'true' if card.tapped else 'false' }}"
-        >
-          <div class="battle-card-art">
-            {% if card.image_url %}
-            <img src="{{ card.image_url }}" alt="{{ card.card_name }}" />
-            {% else %}
-            <div class="battle-card-art-placeholder">
-              <span>{{ card.card_name[:1] }}</span>
-            </div>
-            {% endif %}
+      <section class="board-zone-card board-zone-mini card" id="graveyard-zone" tabindex="0">
+        <div class="board-zone-mini-face" data-zone-anchor="graveyard" data-menu-trigger>
+          {% if graveyard_preview and graveyard_preview.image_url %}
+          <img src="{{ graveyard_preview.image_url }}" alt="{{ graveyard_preview.card_name }}" class="board-zone-preview" />
+          {% else %}
+          <div class="board-zone-preview board-zone-preview-placeholder"><span>GY</span></div>
+          {% endif %}
+          <div class="board-zone-mini-overlay">
+            <p class="eyebrow">Graveyard</p>
+            <strong>{{ graveyard|length }}</strong>
           </div>
-
-          <div class="battle-card-controls">
-            <div class="battle-card-title-row">
-              <h3>{{ card.card_name }}</h3>
-              <span class="battle-card-type">{{ card.type_line or "" }}</span>
-            </div>
-            <p class="status-line">
-              {% if card.is_creature %}<span>Haste</span><span>Goaded</span>{% endif %}
-              {% if card.phased_out %}<span>Phased</span>{% endif %}
-              {% if card.tapped %}<span>Tapped</span>{% endif %}
-            </p>
-            {% if card.notes %}
-            <p class="battle-note-pill">{{ card.notes }}</p>
-            {% endif %}
-            <p class="oracle-text">{{ card.oracle_text or "No oracle text available." }}</p>
-            <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/note" class="note-form">
-              <input
-                type="text"
-                name="note"
-                maxlength="10"
-                value="{{ card.notes or '' }}"
-                placeholder="note"
-                class="note-input"
-              />
-              <button type="submit">Save Note</button>
-            </form>
-            <div class="action-grid card-actions">
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle" data-card-id="{{ card.id }}" data-card-action="toggle-tapped"><input type="hidden" name="flag_name" value="tapped" /><button type="submit">{% if card.tapped %}Untap{% else %}Tap{% endif %}</button></form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/toggle" data-card-id="{{ card.id }}" data-card-action="toggle-phased"><input type="hidden" name="flag_name" value="phased_out" /><button type="submit">{% if card.phased_out %}Phase In{% else %}Phase Out{% endif %}</button></form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Graveyard</button></form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Top Of Library</button></form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
-              {% if card.is_commander %}
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Commander</button></form>
-              {% endif %}
-            </div>
+        </div>
+        <div class="zone-hover-panel zone-hover-panel-list">
+          <div class="zone-hover-panel-header">
+            <strong>Graveyard</strong>
+            <span>{{ graveyard|length }} cards</span>
           </div>
-        </article>
-        {% endfor %}
-      </div>
-      {% else %}
-      <p class="zone-empty zone-empty-stage">No Horde permanents on the battlefield.</p>
-      {% endif %}
-    </div>
-  </section>
-  </div>
-
-  <section class="layout-two zone-rack">
-    <section class="card zone-panel compact-zone-panel" data-zone-panel="commander" id="commander-zone">
-      <div class="zone-panel-header">
-        <div>
-          <p class="eyebrow">Zone 03</p>
-          <h2>Commander Zone</h2>
-        </div>
-        <span class="zone-pill">{{ commander|length }} cards</span>
-      </div>
-      <div class="compact-zone-body" data-zone-anchor="commander">
-        <ul class="zone-list">
-          {% for card in commander %}
-          <li
-            class="zone-entry zone-entry-card"
-            data-card-id="{{ card.id }}"
-            data-card-name="{{ card.card_name }}"
-            data-zone="commander"
-            data-tapped="{{ 'true' if card.tapped else 'false' }}"
-          >
-            <div class="zone-card-head">
-              {% if card.image_url %}
-              <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-card-thumb" />
-              {% else %}
-              <div class="zone-card-thumb zone-card-thumb-placeholder">{{ card.card_name[:1] }}</div>
-              {% endif %}
-              <div class="zone-entry-row">
-                <strong>{{ card.card_name }}</strong>
-                <span>{{ card.type_line or "" }}</span>
+          {% if graveyard %}
+          <div class="zone-hover-list">
+            {% for card in graveyard %}
+            <article class="zone-hover-entry">
+              <div class="zone-hover-entry-copy">
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-hover-thumb" />
+                {% endif %}
+                <div>
+                  <strong>{{ card.card_name }}</strong>
+                  <span>{{ card.type_line or "" }}</span>
+                </div>
               </div>
-            </div>
-            <div class="action-grid zone-actions">
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield">
-                <input type="hidden" name="destination" value="battlefield" />
-                <button type="submit">Battlefield</button>
-              </form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard">
-                <input type="hidden" name="destination" value="graveyard" />
-                <button type="submit">Graveyard</button>
-              </form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile">
-                <input type="hidden" name="destination" value="exile" />
-                <button type="submit">Exile</button>
-              </form>
-            </div>
-          </li>
+              <div class="zone-hover-entry-actions">
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Top</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield"><input type="hidden" name="destination" value="battlefield" /><button type="submit">Field</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
+                {% if card.is_commander %}
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Cmdr</button></form>
+                {% endif %}
+              </div>
+            </article>
+            {% endfor %}
+          </div>
           {% else %}
-          <li class="zone-empty">Empty</li>
+          <p class="board-empty board-empty-mini">Empty</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="board-zone-card board-zone-mini card" id="exile-zone" tabindex="0">
+        <div class="board-zone-mini-face" data-zone-anchor="exile" data-menu-trigger>
+          {% if exile_preview and exile_preview.image_url %}
+          <img src="{{ exile_preview.image_url }}" alt="{{ exile_preview.card_name }}" class="board-zone-preview" />
+          {% else %}
+          <div class="board-zone-preview board-zone-preview-placeholder"><span>EX</span></div>
+          {% endif %}
+          <div class="board-zone-mini-overlay">
+            <p class="eyebrow">Exile</p>
+            <strong>{{ exile|length }}</strong>
+          </div>
+        </div>
+        <div class="zone-hover-panel zone-hover-panel-list">
+          <div class="zone-hover-panel-header">
+            <strong>Exile</strong>
+            <span>{{ exile|length }} cards</span>
+          </div>
+          {% if exile %}
+          <div class="zone-hover-list">
+            {% for card in exile %}
+            <article class="zone-hover-entry">
+              <div class="zone-hover-entry-copy">
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-hover-thumb" />
+                {% endif %}
+                <div>
+                  <strong>{{ card.card_name }}</strong>
+                  <span>{{ card.type_line or "" }}</span>
+                </div>
+              </div>
+              <div class="zone-hover-entry-actions">
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Grave</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield"><input type="hidden" name="destination" value="battlefield" /><button type="submit">Field</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Top</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
+                {% if card.is_commander %}
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Cmdr</button></form>
+                {% endif %}
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="board-empty board-empty-mini">Empty</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="board-zone-card board-zone-mini card" id="commander-zone" tabindex="0">
+        <div class="board-zone-mini-face" data-zone-anchor="commander" data-menu-trigger>
+          {% if commander_preview and commander_preview.image_url %}
+          <img src="{{ commander_preview.image_url }}" alt="{{ commander_preview.card_name }}" class="board-zone-preview" />
+          {% else %}
+          <div class="board-zone-preview board-zone-preview-placeholder"><span>CM</span></div>
+          {% endif %}
+          <div class="board-zone-mini-overlay">
+            <p class="eyebrow">Commander</p>
+            <strong>{{ commander|length }}</strong>
+          </div>
+        </div>
+        <div class="zone-hover-panel zone-hover-panel-list">
+          <div class="zone-hover-panel-header">
+            <strong>Commander</strong>
+            <span>{{ commander|length }} cards</span>
+          </div>
+          {% if commander %}
+          <div class="zone-hover-list">
+            {% for card in commander %}
+            <article class="zone-hover-entry">
+              <div class="zone-hover-entry-copy">
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-hover-thumb" />
+                {% endif %}
+                <div>
+                  <strong>{{ card.card_name }}</strong>
+                  <span>{{ card.type_line or "" }}</span>
+                </div>
+              </div>
+              <div class="zone-hover-entry-actions">
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield"><input type="hidden" name="destination" value="battlefield" /><button type="submit">Field</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard"><input type="hidden" name="destination" value="graveyard" /><button type="submit">Grave</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="board-empty board-empty-mini">Empty</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="board-log card">
+        <div class="zone-hover-panel-header">
+          <strong>Action Log</strong>
+          <span>{{ game.action_logs|length }}</span>
+        </div>
+        <ul class="board-log-list">
+          {% for entry in game.action_logs|reverse %}
+          <li>{{ entry.created_at.strftime("%Y-%m-%d %H:%M:%S") }} · {{ entry.message }}</li>
+          {% else %}
+          <li>No logged actions.</li>
           {% endfor %}
         </ul>
-      </div>
-    </section>
-
-    <section class="card zone-panel compact-zone-panel" data-zone-panel="graveyard" id="graveyard-zone">
-      <div class="zone-panel-header">
-        <div>
-          <p class="eyebrow">Zone 04</p>
-          <h2>Graveyard</h2>
-        </div>
-        <span class="zone-pill">{{ graveyard|length }} cards</span>
-      </div>
-      <div class="compact-zone-body" data-zone-anchor="graveyard">
-        <ul class="zone-list">
-          {% for card in graveyard %}
-          <li
-            class="zone-entry zone-entry-card"
-            data-card-id="{{ card.id }}"
-            data-card-name="{{ card.card_name }}"
-            data-zone="graveyard"
-            data-tapped="{{ 'true' if card.tapped else 'false' }}"
-          >
-            <div class="zone-card-head">
-              {% if card.image_url %}
-              <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-card-thumb" />
-              {% else %}
-              <div class="zone-card-thumb zone-card-thumb-placeholder">{{ card.card_name[:1] }}</div>
-              {% endif %}
-              <div class="zone-entry-row">
-                <strong>{{ card.card_name }}</strong>
-                <span>{{ card.type_line or "" }}</span>
-              </div>
-            </div>
-            <div class="action-grid zone-actions">
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top">
-                <input type="hidden" name="destination" value="library" />
-                <button type="submit">Top</button>
-              </form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom">
-                <button type="submit">Bottom</button>
-              </form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield">
-                <input type="hidden" name="destination" value="battlefield" />
-                <button type="submit">Battlefield</button>
-              </form>
-              {% if card.is_commander %}
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander">
-                <input type="hidden" name="destination" value="commander" />
-                <button type="submit">Commander</button>
-              </form>
-              {% endif %}
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile">
-                <input type="hidden" name="destination" value="exile" />
-                <button type="submit">Exile</button>
-              </form>
-            </div>
-          </li>
-          {% else %}
-          <li class="zone-empty">Empty</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </section>
-
-    <section class="card zone-panel compact-zone-panel" data-zone-panel="exile" id="exile-zone">
-      <div class="zone-panel-header">
-        <div>
-          <p class="eyebrow">Zone 05</p>
-          <h2>Exile</h2>
-        </div>
-        <span class="zone-pill">{{ exile|length }} cards</span>
-      </div>
-      <div class="compact-zone-body" data-zone-anchor="exile">
-        <ul class="zone-list">
-          {% for card in exile %}
-          <li
-            class="zone-entry zone-entry-card"
-            data-card-id="{{ card.id }}"
-            data-card-name="{{ card.card_name }}"
-            data-zone="exile"
-            data-tapped="{{ 'true' if card.tapped else 'false' }}"
-          >
-            <div class="zone-card-head">
-              {% if card.image_url %}
-              <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-card-thumb" />
-              {% else %}
-              <div class="zone-card-thumb zone-card-thumb-placeholder">{{ card.card_name[:1] }}</div>
-              {% endif %}
-              <div class="zone-entry-row">
-                <strong>{{ card.card_name }}</strong>
-                <span>{{ card.type_line or "" }}</span>
-              </div>
-            </div>
-            <div class="action-grid zone-actions">
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-graveyard">
-                <input type="hidden" name="destination" value="graveyard" />
-                <button type="submit">Graveyard</button>
-              </form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield">
-                <input type="hidden" name="destination" value="battlefield" />
-                <button type="submit">Battlefield</button>
-              </form>
-              {% if card.is_commander %}
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander">
-                <input type="hidden" name="destination" value="commander" />
-                <button type="submit">Commander</button>
-              </form>
-              {% endif %}
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top">
-                <input type="hidden" name="destination" value="library" />
-                <button type="submit">Top</button>
-              </form>
-              <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom">
-                <button type="submit">Bottom</button>
-              </form>
-            </div>
-          </li>
-          {% else %}
-          <li class="zone-empty">Empty</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </section>
-  </section>
-
-  <section class="card zone-panel action-log-panel">
-    <div class="zone-panel-header">
-      <div>
-        <p class="eyebrow">Timeline</p>
-        <h2>Action Log</h2>
-      </div>
-      <span class="zone-pill">{{ game.action_logs|length }} entries</span>
-    </div>
-    <ul class="zone-list action-log-list">
-      {% for entry in game.action_logs|reverse %}
-      <li>{{ entry.created_at.strftime("%Y-%m-%d %H:%M:%S") }} · {{ entry.message }}</li>
-      {% else %}
-      <li class="zone-empty">No logged actions.</li>
-      {% endfor %}
-    </ul>
+      </section>
+    </aside>
   </section>
 
   <script type="application/json" data-game-state-json>{{ game_view_state|tojson }}</script>

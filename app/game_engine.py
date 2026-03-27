@@ -235,6 +235,7 @@ def snapshot_game(session: Session | None, game: GameState) -> dict:
             "exile_ids": list(game.exile_ids or []),
             "commander_ids": list(game.commander_ids or []),
             "wave_pending_ids": list(game.wave_pending_ids or []),
+            "battlefield_note": game.battlefield_note,
         },
         "cards": {
             card.id: {
@@ -261,6 +262,7 @@ def restore_snapshot(game: GameState, snapshot: dict) -> None:
     game.exile_ids = list(payload.get("exile_ids", []) or [])
     game.commander_ids = list(payload.get("commander_ids", []) or [])
     game.wave_pending_ids = list(payload.get("wave_pending_ids", []) or [])
+    game.battlefield_note = payload.get("battlefield_note")
     card_payload = snapshot.get("cards", {})
     for card in game.card_instances:
         values = card_payload.get(card.id, {})

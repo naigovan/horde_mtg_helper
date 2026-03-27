@@ -35,3 +35,253 @@ Original prompt: Build and iterate a playable web game in this workspace, valida
 - Harmonized battlefield card colors so the art frame, text, pills, and card surface all sit in the same green/cream/gold palette.
 - Verified with `output/game4-no-shell-before.png` and `output/game4-no-shell-dom.json`; DOM check shows `"shellCount": 0` and `"overlayCount": 0`.
 - Cleanup: deleted the temporary no-shell validation game after verification.
+- User pivoted to a fuller UX reference from `against-the-horde.com`: battlefield should be image-first, actions should live in hover menus, and library/graveyard should feel like docked game zones instead of form stacks.
+- Reworked `app/templates/game_detail.html` into a board-style layout with battlefield creature/noncreature lanes, image-first battlefield cards, hover action menus, a docked library card, and preview-backed graveyard/exile/commander mini zones.
+- Updated `app/static/styles.css` to a darker purple/black board treatment with floating hover panels, image-only battlefield tiles, a compact right-side dock, and smaller supporting UI chrome.
+- Fixed `app/static/app.js` so animated layout snapshots only index real battlefield card nodes, hover menus are stripped from ghost cards, and single-card tap rotation uses the same `scale(0.78)` end state as the CSS.
+- Playwright validation on temporary game 4:
+  - Shared client baseline screenshot in `output/game4-board-default/`.
+  - Wider direct Playwright capture in `output/game4-board-wide.png`.
+  - Verified hover menu behavior in `output/game4-board-hover.png`.
+  - Verified smooth single-card tap rotation mid-animation in `output/game4-board-tap-mid.png`.
+  - Verified battlefield -> graveyard flight mid-animation in `output/game4-board-graveyard-mid.png`.
+  - Verified graveyard hover panel with preview card in `output/game4-board-graveyard-hover.png`.
+  - `output/game4-board-check.json` recorded no console/page errors and matched the visual state after tap + move-to-graveyard.
+- Follow-up desktop row fit check on temporary game 5:
+  - Initial board overhaul was still only fitting 4 cards across at a `1600px` viewport, so the battlefield tiles and dock width were tightened.
+  - Final desktop verification in `output/game5-wide-1600-2.png` and `output/game5-wide-1600-2.json` confirms `firstRowCount: 5` at `1600px` wide while keeping hover menus intact.
+- Cleanup: deleted temporary validation games 4 and 5 after the UX verification pass.
+- User follow-up: mill / mill N felt lost in the new UX, and the purple board pass needed to return to the earlier greener tabletop palette.
+- Created branch `codex/new_ux` for the UX work before continuing.
+- Root cause for the mill regression: the library hover panel still existed, but on desktop it was positioned above the viewport. `output/game3-library-hover.json` showed the panel at `top: -203.59375`, which hid the mill controls off-screen.
+- Updated the library dock so its hover panel opens to the left of the library card on desktop, falls back above the card on narrower layouts, and added a subtle on-card hint: “Hover for mill, shuffle, and token deploy.”
+- Recolored the board pass back toward green felt / dark-table tones while keeping the newer docked layout and hover menus.
+- Validation on temporary games 3 and 4 using the local server on port `8001`:
+  - `output/game3-library-hover-fixed.png` shows the mill panel fully visible on desktop after the position fix.
+  - `output/game4-library-hover-green.png` verifies the visible library hover in the greener palette.
+  - `output/game4-mill-check.json` confirms both mill actions work:
+    - after `Mill 1`: library `299`, graveyard `1`
+    - after `Mill N` with count `3`: library `296`, graveyard `4`
+  - Shared Playwright client re-check in `output/game4-shared-mill-check/` matched the final state with no errors.
+- Cleanup: deleted temporary validation games 3 and 4 after the mill/color verification pass.
+- Follow-up UX pass: moved the global library controls (`Mill 1`, `Mill N`, count input, `Shuffle`, `Tap All`, `Untap All`) out of the library hover and into the top action cluster next to `Back`, `Undo`, `Save`, and `Delete`.
+- The library hover is now token-deploy only, with the library card hint updated to “Hover for token deploy.”
+- Validation on temporary game 3:
+  - `output/game3-top-controls.png` shows the moved controls in the top action area.
+  - `output/game3-library-hover-tokens-only.png` shows the library hover now contains token deploy entries only.
+  - `output/game3-top-controls-check.json` confirms the visible top controls are `Mill 1`, `Mill N`, `Shuffle`, `Tap All`, `Untap All`.
+  - The same check confirms both moved mill actions still work from their new position:
+    - after `Mill 1`: library `299`, graveyard `1`
+    - after `Mill N` with count `3`: library `296`, graveyard `4`
+  - Shared Playwright client re-check in `output/game3-shared-top-controls/` matched the final state with no errors.
+- Cleanup: deleted the temporary top-controls validation game after verification.
+- Follow-up layout pass: moved the entire dock block (`Library`, `Graveyard`, `Exile`, `Commander`, `Action Log`) from the right side of the board to the left while keeping its card sizes and visual treatment the same.
+- Achieved as a layout-only CSS change: desktop grid columns were reversed and the dock hover panels were mirrored so they still open into the battlefield.
+- Validation on temporary game 3:
+  - `output/game3-left-dock.png` shows the dock block on the left with the battlefield preserved on the right.
+  - `output/game3-left-dock-check.json` confirms desktop geometry at `1600px`: sidebar `left: 28`, `width: 320`; battlefield `left: 372`, `width: 1200`.
+  - `output/game3-left-dock-library-hover.png` shows the library token panel now opening to the right of the left-side dock.
+  - `output/game3-left-dock-grave-hover-2.json` confirms the graveyard hover panel is visible after the mirror pass.
+  - Shared Playwright client re-check in `output/game3-shared-left-dock/` passed with no errors; because that client uses a narrower viewport, it hit the stacked responsive layout instead of the two-column desktop layout.
+- Cleanup: deleted the temporary left-dock validation game after verification.
+- Follow-up alignment fix: the left dock was still bottom-aligned against the battlefield row, so every additional battlefield row pushed the entire dock block downward.
+- Fixed by changing `.board-sidebar` from `align-content: end; align-self: end;` to `align-content: start; align-self: start;` in `app/static/styles.css`.
+- Validation on temporary game 3 with a multi-row battlefield:
+  - `output/game3-dock-top-align.png` shows the dock pinned to the top while the battlefield wraps into multiple rows.
+  - `output/game3-dock-top-align.json` records `rowCount: 3` and `topDelta: 0`, meaning the library top edge and battlefield top edge match exactly.
+  - Shared Playwright client re-check in `output/game3-shared-dock-top-align/` passed with no errors.
+- Cleanup: deleted the temporary top-alignment validation game after verification.
+- Follow-up battlefield stacking pass: identical battlefield cards now group into a single visible stack tile instead of repeating as separate cards.
+- Updated `app/routes/games.py` so battlefield stack grouping is computed server-side once, exposed to the template, and serialized into `game_view_state` as stable `stackKey` values for animation/test use.
+- Updated `app/templates/game_detail.html` so both creature and noncreature lanes render stack tiles with a shared hover menu, stack count badge, and the same per-card actions (`Tap`, `Phase Out`, `Destroy`/`Graveyard`, `Exile`, `Library`, `Bottom`).
+- Updated `app/static/styles.css` so stacked cards show visible duplicate slivers behind the lead card and animate the count badge when the stack grows or shrinks.
+- Updated `app/static/app.js` so DOM layout snapshots use stack keys on the battlefield, movement ghosts still animate when a card joins or leaves a persistent stack, and `render_game_to_text` now includes `battlefieldStacks`.
+- Validation on temporary game 3:
+  - Shared `$develop-web-game` client baseline run succeeded at `output/game3-stack-baseline/`.
+  - Targeted Playwright validation deployed the same library token (`Zombie // Zombie`) three times, creating a visible stack of `3` in `output/game3-stack-grouped.png`.
+  - The same stacked card kept the hover action menu with buttons `Tap`, `Phase Out`, `Destroy`, `Exile`, `Library`, and `Bottom`.
+  - Destroying once from that stack reduced the visible count from `3` to `2` and increased graveyard from `0` to `1`, captured in `output/game3-stack-after-destroy.png`.
+  - `output/game3-stack-check.json` recorded no console errors or page errors and shows final `battlefieldStacks` count `2` with graveyard count `1`.
+- Regression check: `PYTHONPATH=. pytest -q` passed with `13 passed in 0.16s`.
+- Cleanup: deleted the temporary stack-validation game after verification.
+- Follow-up visual cleanup on stacked cards: the first stack version still exposed a bright cream strip between the lead card and the rear layers.
+- Fixed by changing the rear stack layers to darker neutral slivers and moving them fully outside the lead card face instead of revealing them inside the lead card width.
+- Validation on temporary game 3:
+  - Settled screenshot at `output/game3-stack-frame-fix-final.png` shows the stack face without the internal cream/yellow strip.
+  - Shared client regression baseline succeeded at `output/game3-stack-frame-shared-final/`.
+  - `output/game3-stack-frame-fix-final.json` recorded a clean `Zombie // Zombie` stack of `6` with no page/console errors during the visual check run.
+- Cleanup: deleted the temporary visual-validation games after verification.
+- Follow-up menu layering fix: pinned battlefield menus and dock popovers were competing at the same stacking level as other hovered cards/zones, so later siblings could visually sit above them.
+- Fixed in `app/static/styles.css` by splitting hover and focus stacking: hovered battlefield cards now rise to `z-index: 60`, focused/persistent battlefield menus rise to `260`, hovered zone cards rise to `140`, and focused/persistent zone cards rise to `320`.
+- Validation on temporary game 3:
+  - Shared `$develop-web-game` baseline succeeded at `output/game3-menu-layer-baseline/`.
+  - `output/game3-menu-layer-card.png` shows the clicked battlefield menu staying above the board while focused.
+  - `output/game3-menu-layer-graveyard.png` shows the graveyard popover rendering above the neighboring mini-zones instead of underneath them.
+  - `output/game3-menu-layer-check.json` recorded no console/page errors and shows the top element inside both sampled overlap points belongs to the focused menu/panel, with `firstCardZ: 260` vs `secondCardZ: 0` and `graveyardZ: 320` vs `exileZ: 0`.
+- Cleanup: deleted the temporary menu-layer validation game after verification.
+- Follow-up pinned-menu hardening: the user still saw graveyard/exile/commander popovers losing to nearby hover targets, so the CSS-only z-index solution was not robust enough.
+- Updated `app/static/app.js` to create and synchronize a `.menu-scrim` overlay whenever any battlefield/zone menu is pinned. The scrim lives inside `[data-game-page]`, activates only while a menu is pinned, and blocks hover/click access to the rest of the board until the menu is dismissed.
+- Updated `app/static/styles.css` so `.menu-scrim` sits below pinned owners but above the rest of the board, and made both `.battle-card-menu` and `.zone-hover-panel` more opaque with stronger shadows so underlying cards no longer read as if they are on top of the menu.
+- Validation on temporary game 4:
+  - Shared `$develop-web-game` client run succeeded at `output/game4-zone-menu-scrim-shared/`.
+  - `output/game4-zone-scrim-check/graveyard-pinned.png` shows the pinned graveyard panel above a dimmed board, with neighboring `Exile` / `Commander` mini-zones visually suppressed under the scrim.
+  - `output/game4-zone-scrim-check/report.json` recorded no console/page errors and confirms the intended pinned behavior: `scrimVisible: true`, `scrimPointerEvents: "auto"`, `hoverBlocked: true` when Playwright tried to hover `#exile-zone`, and the sampled overlap point still resolved inside the graveyard panel (`topInsideGraveyardPanel: true`).
+  - `output/game4-zone-scrim-close-check/report.json` confirms clicking the scrim dismisses the pinned menu cleanly (`graveyardPinned: false`, `scrimVisible: false`, `panelVisible: "hidden"`).
+- Cleanup: deleted the temporary scrim-validation game after verification.
+- Follow-up zone-panel layering fix: even with the scrim, the zone popovers were still fundamentally positioned inside the mini-zone grid, which left room for the user to still perceive `Graveyard` as sitting behind `Exile` / `Commander`.
+- Updated `app/static/app.js` with viewport-level zone panel positioning. The zone popovers now measure their trigger card, compute a placement (`right`, `left`, `top`, or `bottom`), and set fixed `top` / `left` coordinates so they render as true top-layer sheets instead of as local absolute children inside the dock grid.
+- Updated `app/static/styles.css` so `.zone-hover-panel` uses `position: fixed` with a much higher `z-index`, opaque green-black backgrounds, no backdrop transparency, and arrow direction driven by `data-panel-position`.
+- Validation on temporary game 4:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game4-zone-fixed-shared/`.
+  - `output/game4-zone-fixed-check/graveyard-hover.png` and `output/game4-zone-fixed-check/graveyard-pinned.png` show the graveyard panel visibly above the `Exile` and `Commander` mini-zones in both hover and pinned states.
+  - `output/game4-zone-fixed-check/report.json` recorded no console/page errors and confirms the sampled overlap point resolves inside the graveyard panel for both hover and pinned states (`topInsidePanel: true`, `topInsideExile: false`, `topInsideCommander: false`).
+  - Large-panel regression check after milling to 36 graveyard cards: shared client screenshot at `output/game4-zone-fixed-large-shared/shot-0.png`, direct screenshot at `output/game4-zone-fixed-large-check/graveyard-large-pinned.png`, and `output/game4-zone-fixed-large-check/report.json`. The large overlapping panel still resolves above the mini-zones at the sampled point (`topInsidePanel: true`, `topInsideExile: false`, `topInsideCommander: false`).
+- Cleanup: deleted the temporary large-graveyard validation game after verification.
+- User reported the core issue still persisted in their environment and correctly identified the likely cause: the graveyard panel was still a nested child of the zone section, so it could still lose to sibling zone sections despite all the CSS stacking work.
+- Reworked zone menus in `app/static/app.js` into a true overlay/portal model:
+  - added a dedicated `[data-zone-panel-root]` under the game page
+  - moved each `.zone-hover-panel` out of its zone section and into that root
+  - stored `data-owner-id` so clicks inside the floating panel still map back to the correct `graveyard` / `exile` / `commander` owner
+  - added hover/panel hover tracking with a short hide delay so the pointer can travel from the zone card into the floating panel without it collapsing
+  - kept pinned-menu behavior wired into the same floating panel system
+- Updated `app/static/styles.css` so the portal root is a fixed high-z overlay layer and `.zone-hover-panel` visibility is now driven by its own `.is-visible` class instead of zone-card descendant selectors.
+- Validation on temporary game 4 (`Zone Portal Repro`) with 36 graveyard cards:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game4-zone-portal-shared/`.
+  - `output/game4-zone-portal-check/graveyard-portal-pinned.png` shows the graveyard panel rendered above the dock fields as a separate floating sheet.
+  - `output/game4-zone-portal-check/report.json` confirms the structure and layering mechanically:
+    - `rootExists: true`
+    - `panelInRoot: true`
+    - `panelOwnerId: "graveyard-zone"`
+    - sampled overlap point resolves inside the floating panel (`topInsidePanel: true`) and not inside `Exile` / `Commander`.
+  - Interaction regression check in `output/game4-zone-portal-action-check/` confirms buttons inside the floating graveyard panel still work:
+    - before action: graveyard `36`, exile `0`
+    - after clicking `Exile`: graveyard `35`, exile `1`
+    - `render_game_to_text` matched the updated counts and recorded `latestAction: "Moved Zombie // Zombie to exile."`
+- Cleanup: deleted the temporary portal-validation game after verification.
+- User rolled back the unsuccessful menu-layer experiments and asked to stop trying to solve the overlap problem directly. New plan: avoid sibling overlap by changing only the dock layout.
+- Follow-up layout-only pass: changed `.board-zone-mini-grid` in `app/static/styles.css` from a 3-column row to a single vertical column, and constrained `.board-zone-mini` to a narrow fixed-ish width so the mini-zone cards keep their slim card-like proportions while stacking top-to-bottom.
+- Resulting sidebar order is now:
+  - `Library`
+  - `Graveyard`
+  - `Exile`
+  - `Commander`
+  - `Action Log`
+- Validation on temporary game 4 (`Zone Vertical Layout`) via local server on port `8003`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game4-zone-vertical-shared/`.
+  - `output/game4-zone-vertical-check/layout-hover.png` shows the three mini-zone blocks stacked vertically with the action log below them.
+  - `output/game4-zone-vertical-check/report.json` confirms the geometry mechanically:
+    - `verticalOrder: true`
+    - `allSingleColumn: true`
+    - graveyard/exile/commander share the same `left` edge and appear in increasing `top` order before the action log.
+- Cleanup: deleted the temporary vertical-layout validation game after verification.
+- User clarified the intended layout more precisely: not a skinny vertical strip and not a grouped mini-grid. The entire graveyard/exile/commander block should be deleted and rebuilt as three standalone rows directly under the library and above the action log.
+- Reworked `app/templates/game_detail.html` accordingly:
+  - removed the `.board-zone-mini-grid` wrapper entirely
+  - made `graveyard`, `exile`, and `commander` direct sibling sections in the sidebar
+  - kept the same per-zone hover menu markup and actions
+- Updated `app/static/styles.css` to match the rebuilt structure:
+  - removed the now-unused `.board-zone-mini-grid` layout dependency
+  - kept `.board-zone-mini` full width
+  - reduced `.board-zone-mini-face` height to `11rem` so the stacked rows read as sidebar blocks instead of tall slivers
+- Validation on temporary game 4 (`Zone Full Width Layout`) via local server on port `8004`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game4-zone-rebuild-shared/`.
+  - `output/game4-zone-rebuild-check/layout-hover.png` shows the rebuilt sidebar with full-width stacked rows under the library.
+  - `output/game4-zone-rebuild-check/report.json` confirms the geometry mechanically:
+    - `sameWidth: true`
+    - `sameLeft: true`
+    - `verticalOrder: true`
+    - graveyard, exile, commander, then action log.
+- Cleanup: deleted the temporary rebuild-validation game after verification.
+- User follow-up: the rebuilt sidebar was still too wide and was taking too much battlefield space.
+- Tightened the left dock in `app/static/styles.css` by shrinking `.board-grid` from `minmax(260px, 320px)` to `minmax(140px, 170px)` and reducing sidebar gaps.
+- Scaled the dock internals to match the narrower column:
+  - library surface height reduced from `28rem` to `18rem`
+  - library insets/pill typography tightened
+  - `Take Turn` button narrowed and shortened
+  - graveyard/exile/commander row heights reduced from `11rem` to `7.4rem`
+  - action log padding and max height reduced slightly
+- Validation on existing game 3 (`Menu Pin Validation`) via local server on port `8005`:
+  - Shared `$develop-web-game` client run succeeded at `output/game3-sidebar-compact-shared/`.
+  - Direct desktop capture at `1600x1400` saved to `output/game3-sidebar-compact-check/layout.png`.
+  - `output/game3-sidebar-compact-check/report.json` confirms the new desktop layout:
+    - `gridTemplateColumns: "170px 1356.41px"`
+    - `sidebarWidth: 170`
+    - `battlefieldWidth: 1356`
+    - `libraryWidth: 170`
+    - `graveyardWidth: 170`
+    - `actionLogWidth: 170`
+    - `battlefieldStartsRightOfSidebar: true`
+    - no console/page errors
+
+2026-03-27
+- User reported sidebar width controls still appeared ineffective visually when adjusting `.board-grid`, sidebar gaps, and font sizes.
+- Root cause: the responsive rule at `@media (max-width: 1360px)` was forcing `.board-grid` to a single column (`grid-template-columns: 1fr`), which made `.board-sidebar` expand to full width and masked desktop/tablet width tweaks.
+- Updated `app/static/styles.css` to enforce a strict sidebar track using a CSS variable and fixed sizing:
+  - `.board-grid` now defines `--board-sidebar-width` and uses `grid-template-columns: var(--board-sidebar-width) minmax(0, 1fr)`.
+  - `.board-sidebar` now has explicit `width`, `min-width`, and `max-width` all bound to `--board-sidebar-width`, plus `justify-self: start`.
+  - `.board-battlefield.card` and direct sidebar children now include `min-width: 0` to prevent content-driven overflow from widening tracks.
+- Updated responsive behavior:
+  - At `max-width: 1360px`, layout now remains two-column with a slightly smaller strict sidebar width (`158px`) instead of collapsing to single-column.
+  - Single-column stacking was moved to `max-width: 1040px`, where `.board-sidebar` is intentionally reset to full width for mobile.
+- No Playwright validation run was executed for this specific follow-up patch yet.
+
+- User reported Chrome DevTools still showed `.board-sidebar` at `320px`, which contradicted the Playwright measurement from the previous pass.
+- Investigation showed the actual live page on `/games/2` was already rendering a narrow dock in Playwright, but the app was still serving static assets at fixed URLs (`/static/styles.css`, `/static/app.js`) with only `ETag`/`Last-Modified`, so browser-side stale CSS was a real possibility.
+- Added shared template helper `asset_url()` in `app/template_helpers.py` and registered it with both `app/routes/decks.py` and `app/routes/games.py` so templates now emit versioned asset URLs based on file mtime.
+- Updated `app/templates/base.html` to load `styles.css` and `app.js` through `asset_url(...)`, producing URLs like `/static/styles.css?v=<mtime>`.
+- Added static no-cache headers in `app/main.py` via middleware: `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`, and `Expires: 0`.
+- Validation on existing game 2 (`Zombie Horde Game`) via local server on port `8005`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game2-cache-bust-shared/`.
+  - Direct browser capture at `output/game2-cache-bust-check/layout.png`.
+  - `output/game2-cache-bust-check/report.json` confirms refreshed pages now load versioned assets:
+    - `cssHref: "http://127.0.0.1:8005/static/styles.css?v=..."`
+    - `jsSrc: "http://127.0.0.1:8005/static/app.js?v=..."`
+    - no console/page errors
+  - `output/game2-cache-bust-check/styles-head.txt` confirms static responses now include `Cache-Control: no-store, no-cache, must-revalidate`.
+- User follow-up: after the cache-busting refresh, the page became blurred and unclickable because the legacy full-page `.menu-scrim` blocker was still active when a menu was pinned.
+- Removed the scrim behavior completely:
+  - deleted scrim creation/sync from `app/static/app.js`
+  - removed `.menu-scrim` CSS from `app/static/styles.css`
+  - pinned menus now stay local to their owner without adding any full-page overlay or pointer blocker
+- Validation on temporary game 4 (`Scrim Fix Validation`) via local server on port `8005`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game2-scrim-fix-shared/`.
+  - Direct browser sequence in `output/game4-scrim-fix-check/`:
+    - `menu-pinned.png` shows a pinned card menu with no page blur/scrim
+    - `after-mill.png` shows another top control still clickable immediately afterward
+    - `report.json` confirms `scrimCount: 0`, library changed `299 -> 298`, and no console/page errors
+- Cleanup: deleted temporary validation game 4 after verification.
+- Regression check: `PYTHONPATH=. pytest -q` passed with `13 passed`.
+
+- User requested a battlefield-wide creature note field for global reminders/buffs and wanted the mill count input moved after the `Mill N` button with label `N =`.
+- Added `battlefield_note` plumbing to the game model/migration/snapshot path (`app/models.py`, `app/db.py`, `app/game_engine.py`, `app/routes/games.py`) so the game schema can support a shared battlefield note.
+- Updated the top toolbar in `app/templates/game_detail.html` and `app/static/styles.css` so the mill controls now read `Mill N` followed by a compact `N =` counter pill.
+- Added a new creature-board note panel at the top of the creatures lane in `app/templates/game_detail.html` / `app/static/styles.css` with room for longer text than the old 10-character per-card notes.
+- Browser-submit path for that note form proved unreliable under this page's dynamic replacement flow, so the note field now persists locally per game in the browser through `app/static/app.js`:
+  - note is stored under a per-game localStorage key
+  - it restores after dynamic DOM swaps and full reloads
+  - `render_game_to_text` now reports the live battlefield note so Playwright can verify it
+- Validation on temporary game 4 (`Battlefield Note Validation`) via local server on port `8005`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game2-battlefield-note-shared/`.
+  - Direct browser sequence in `output/game4-battlefield-note-check/` confirms the full flow:
+    - long battlefield note entered and visible in `note-saved.png`
+    - note survives a `Mill N` action and a full reload in `reloaded.png`
+    - `report.json` confirms `noteMatches: true`, `stateBattlefieldNote` matches the saved text, and the mill toolbar order is `BUTTON:Mill N` then `LABEL:N =`
+  - no console/page errors were recorded
+- Cleanup: deleted temporary validation game 4 after verification.
+
+- User requested the same sleek green tabletop feel across the rest of the app, especially the landing page and deck-management pages, so setup and play would look like one coherent product.
+- Reworked the non-game routes and templates into a shared app-shell system:
+  - `app/routes/decks.py` now builds richer home-page context (deck counts, saved game count, total cached cards, commander-ready count) through `_build_home_context(...)`, and reuses it for create-deck validation errors.
+  - `app/templates/index.html` was rebuilt into a welcome-page hero with summary chips, three highlight cards, a styled deck-creation panel, and a card-based saved-decks list.
+  - `app/templates/deck_detail.html` now uses the same hero/panel language for deck overview, launch-game controls, saved-game cards, and the current decklist.
+  - `app/templates/deck_edit.html` now matches the same shell with a hero banner, polished editor panel, and a compact notes sidebar.
+- Extended `app/static/styles.css` with a shared non-game design system:
+  - upgraded site header treatment
+  - added reusable `app-page`, `app-hero`, `app-chip`, `app-panel`, `app-grid`, and list-card patterns
+  - added richer form-shell styling so create/edit screens keep the tabletop feel instead of falling back to plain admin forms
+  - restyled decklist surfaces into parchment-style panels with multi-column formatting on wide screens
+- Validation on existing game 2 and deck 2 via local server on port `8005`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game2-shared-app-shell/`.
+  - Direct page captures saved to `output/app-shell-pages/home.png`, `output/app-shell-pages/deck-detail.png`, and `output/app-shell-pages/deck-edit.png`.
+  - `output/app-shell-pages/report.json` confirms all three pages rendered the new hero shell successfully (`heroExists: true`) with no console/page errors.
+- Regression check: `PYTHONPATH=. pytest -q` passed with `13 passed`.
