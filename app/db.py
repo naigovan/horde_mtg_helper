@@ -40,6 +40,8 @@ def run_migrations() -> None:
             game_columns = {column["name"] for column in inspector.get_columns("game_states")}
             if "commander_ids" not in game_columns:
                 connection.execute(text("ALTER TABLE game_states ADD COLUMN commander_ids JSON"))
+            if "battlefield_note" not in game_columns:
+                connection.execute(text("ALTER TABLE game_states ADD COLUMN battlefield_note TEXT"))
 
 
 def get_session() -> Session:

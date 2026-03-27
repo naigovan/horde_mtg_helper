@@ -1,41 +1,99 @@
 {% extends "base.html" %}
 {% block title %}Decks | MTG Horde Assistant{% endblock %}
 {% block content %}
-<section class="hero card">
-  <div>
-    <p class="eyebrow">MVP</p>
-    <h1>Build and run a Horde deck locally</h1>
-    <p>Paste a decklist, cache cards from Scryfall, then start a saved Horde game with simple battlefield controls.</p>
-  </div>
-</section>
+<div class="app-page">
+  <section class="card app-hero app-hero-home">
+    <div class="app-hero-grid">
+      <div class="app-hero-copy">
+        <p class="eyebrow">Horde Command</p>
+        <h1>Build, tune, and launch Horde decks from one polished table.</h1>
+        <p class="app-subtitle">The setup pages now carry the same sleek green tabletop vibe as the game board, so deck creation, editing, and live play all feel like parts of the same tool.</p>
+        <div class="app-chip-row">
+          <span class="app-chip">{{ decks|length }} decks</span>
+          <span class="app-chip">{{ saved_game_count }} saved games</span>
+          <span class="app-chip">{{ total_card_count }} cached cards</span>
+          <span class="app-chip">{{ commander_deck_count }} commander-ready</span>
+        </div>
+      </div>
 
-<section class="layout-two">
-  <form class="card stack" method="post" action="/decks">
-    <h2>Create deck</h2>
-    {% if error %}
-    <p class="error">{{ error }}</p>
-    {% endif %}
-    <label>Name</label>
-    <input type="text" name="name" value="{{ name or '' }}" placeholder="Zombie Horde" required />
-    <label>Commander (optional)</label>
-    <input type="text" name="commander_name" value="{{ commander_name or '' }}" placeholder="The Scarab God" />
-    <label>Decklist</label>
-    <textarea name="decklist_text" rows="12" placeholder="4 Gravecrawler&#10;2 Dark Ritual" required>{{ decklist_text or '' }}</textarea>
-    <button type="submit">Parse, Resolve, and Save</button>
-  </form>
-
-  <section class="card stack">
-    <h2>Saved decks</h2>
-    {% if decks %}
-      {% for deck in decks %}
-      <a class="deck-link" href="/decks/{{ deck.id }}">
-        <strong>{{ deck.name }}</strong>
-        <span>{{ deck_card_counts.get(deck.id, 0) }} cards</span>
-      </a>
-      {% endfor %}
-    {% else %}
-      <p>No saved decks yet.</p>
-    {% endif %}
+      <div class="app-highlight-grid">
+        <article class="app-highlight-card">
+          <p class="eyebrow">Build</p>
+          <h2>Paste a list and save it fast</h2>
+          <p>Drop in a Horde decklist, set an optional commander, and keep everything ready for future runs.</p>
+        </article>
+        <article class="app-highlight-card">
+          <p class="eyebrow">Tune</p>
+          <h2>Edit without losing your style</h2>
+          <p>Refine decklists and commanders from the same visual language as the game board itself.</p>
+        </article>
+        <article class="app-highlight-card">
+          <p class="eyebrow">Play</p>
+          <h2>Jump back into saved games</h2>
+          <p>Keep decks, saved states, and active Horde runs all one click away from this landing page.</p>
+        </article>
+      </div>
+    </div>
   </section>
-</section>
+
+  <section class="app-grid app-grid-main">
+    <form class="card app-panel app-form-panel app-form-shell" method="post" action="/decks">
+      <header class="app-panel-header">
+        <p class="eyebrow">Create Deck</p>
+        <h2>Start a new Horde list</h2>
+        <p>Paste the list, add a commander if you want one, and save a deck that’s immediately ready for game creation.</p>
+      </header>
+
+      {% if error %}
+      <p class="error">{{ error }}</p>
+      {% endif %}
+
+      <div class="app-form">
+        <label class="app-field">
+          <span>Name</span>
+          <input type="text" name="name" value="{{ name or '' }}" placeholder="Zombie Horde" required />
+        </label>
+
+        <label class="app-field">
+          <span>Commander (optional)</span>
+          <input type="text" name="commander_name" value="{{ commander_name or '' }}" placeholder="The Scarab God" />
+        </label>
+
+        <label class="app-field">
+          <span>Decklist</span>
+          <textarea name="decklist_text" rows="12" placeholder="4 Gravecrawler&#10;2 Dark Ritual" required>{{ decklist_text or '' }}</textarea>
+        </label>
+
+        <button type="submit">Parse, Resolve, and Save</button>
+      </div>
+    </form>
+
+    <section class="card app-panel">
+      <header class="app-panel-header">
+        <p class="eyebrow">Saved Decks</p>
+        <h2>Return to your hordes</h2>
+        <p>Open any deck to edit it, start a fresh game, or resume one of its saved table states.</p>
+      </header>
+
+      {% if decks %}
+      <div class="app-deck-list">
+        {% for deck in decks %}
+        <a class="app-deck-card" href="/decks/{{ deck.id }}">
+          <div class="app-deck-card-copy">
+            <strong>{{ deck.name }}</strong>
+            <span>{% if deck.commander_name %}Commander: {{ deck.commander_name }}{% else %}No commander configured{% endif %}</span>
+          </div>
+          <div class="app-deck-card-meta">
+            <span class="app-mini-chip">{{ deck_card_counts.get(deck.id, 0) }} cards</span>
+            <span class="app-mini-chip">{{ deck.games|length }} games</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="app-empty">No saved decks yet. Create one on the left to start your first Horde table.</p>
+      {% endif %}
+    </section>
+  </section>
+</div>
 {% endblock %}

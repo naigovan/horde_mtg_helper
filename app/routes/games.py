@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+import hashlib
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -26,10 +27,12 @@ from app.game_engine import (
     untap_all,
 )
 from app.models import DeckDefinition, GameState
+from app.template_helpers import register_template_helpers
 
 
 router = APIRouter(prefix="/games")
 templates = Jinja2Templates(directory="app/templates")
+register_template_helpers(templates)
 VISIBLE_ZONE_ORDER = {
     "library": 0,
     "battlefield": 1,
@@ -70,6 +73,16 @@ def view_game(game_id: int, request: Request, session: Session = Depends(get_ses
     graveyard = [card for card in game.card_instances if card.id in game.graveyard_ids]
     exile = [card for card in game.card_instances if card.id in game.exile_ids]
     commander = [card for card in game.card_instances if card.id in (game.commander_ids or [])]
+    battlefield = sorted(battlefield, key=lambda c: c.zone_position)
+    battlefield_creatures = [card for card in battlefield if card.is_creature]
+    battlefield_noncreatures = [card for card in battlefield if not card.is_creature]
+    battlefield_creature_stacks = _build_battlefield_stacks(battlefield_creatures)
+    battlefield_noncreature_stacks = _build_battlefield_stacks(battlefield_noncreatures)
+    battlefield_stack_keys = {
+        card_id: stack["stack_key"]
+        for stack in battlefield_creature_stacks + battlefield_noncreature_stacks
+        for card_id in stack["card_ids"]
+    }
     cards_by_id = {card.id: card for card in game.card_instances}
     library_tokens_map: OrderedDict[tuple[str, str], dict] = OrderedDict()
     for card_id in game.library_order or []:
@@ -86,12 +99,16 @@ def view_game(game_id: int, request: Request, session: Session = Depends(get_ses
         {
             "request": request,
             "game": game,
-            "battlefield": sorted(battlefield, key=lambda c: c.zone_position),
+            "battlefield": battlefield,
+            "battlefield_creatures": battlefield_creatures,
+            "battlefield_noncreatures": battlefield_noncreatures,
+            "battlefield_creature_stacks": battlefield_creature_stacks,
+            "battlefield_noncreature_stacks": battlefield_noncreature_stacks,
             "graveyard": sorted(graveyard, key=lambda c: c.zone_position),
             "exile": sorted(exile, key=lambda c: c.zone_position),
             "commander": sorted(commander, key=lambda c: c.zone_position),
             "library_tokens": library_tokens,
-            "game_view_state": _build_game_view_state(game),
+            "game_view_state": _build_game_view_state(game, battlefield_stack_keys),
         },
     )
 
@@ -213,6 +230,15 @@ def update_card_note(game_id: int, card_id: int, note: str = Form(""), session: 
     return RedirectResponse(url=f"/games/{game.id}", status_code=303)
 
 
+@router.post("/{game_id}/battlefield-note")
+def update_battlefield_note(game_id: int, note: str = Form(""), session: Session = Depends(get_session)):
+    """Update the shared creature battlefield note."""
+    game = _load_game(session, game_id)
+    game.battlefield_note = (note or "").strip() or None
+    session.commit()
+    return RedirectResponse(url=f"/games/{game.id}", status_code=303)
+
+
 def _load_game(session: Session, game_id: int) -> GameState:
     game = session.scalar(
         select(GameState)
@@ -224,7 +250,7 @@ def _load_game(session: Session, game_id: int) -> GameState:
     return game
 
 
-def _build_game_view_state(game: GameState) -> dict:
+def _build_game_view_state(game: GameState, battlefield_stack_keys: dict[int, str] | None = None) -> dict:
     """Provide a compact but complete card + zone snapshot for UI animation and tests."""
 
     library_ids = list(game.library_order or [])
@@ -246,6 +272,7 @@ def _build_game_view_state(game: GameState) -> dict:
         "turn": game.turn_number,
         "wave": game.wave_number,
         "latestAction": game.action_logs[-1].message if game.action_logs else None,
+        "battlefieldNote": game.battlefield_note or "",
         "counts": {
             "library": len(library_ids),
             "battlefield": len(battlefield_ids),
@@ -273,7 +300,41 @@ def _build_game_view_state(game: GameState) -> dict:
                 "isToken": card.is_token,
                 "typeLine": card.type_line or "",
                 "note": card.notes or "",
+                "stackKey": battlefield_stack_keys.get(card.id) if battlefield_stack_keys and card.current_zone == "battlefield" else None,
             }
             for card in cards
         ],
     }
+
+
+def _build_battlefield_stacks(cards: list) -> list[dict]:
+    """Group battlefield cards into visual stacks when they are identical in visible state."""
+
+    grouped: OrderedDict[tuple, list] = OrderedDict()
+    for card in cards:
+        key = (
+            card.card_name,
+            card.image_url or "",
+            card.type_line or "",
+            card.oracle_text or "",
+            bool(card.tapped),
+            bool(card.phased_out),
+            card.notes or "",
+            bool(card.is_commander),
+            bool(card.is_creature),
+        )
+        grouped.setdefault(key, []).append(card)
+
+    stacks = []
+    for key, group_cards in grouped.items():
+        digest = hashlib.sha1(repr(key).encode("utf-8")).hexdigest()[:12]
+        stacks.append(
+            {
+                "card": group_cards[0],
+                "card_ids": [card.id for card in group_cards],
+                "count": len(group_cards),
+                "stack_key": f"bf-stack-{digest}",
+                "stack_layers": list(range(min(len(group_cards) - 1, 4))),
+            }
+        )
+    return stacks
