@@ -14,6 +14,7 @@ ZONE_LIBRARY = "library"
 ZONE_BATTLEFIELD = "battlefield"
 ZONE_GRAVEYARD = "graveyard"
 ZONE_EXILE = "exile"
+ZONE_VANISHED = "vanished"
 ZONE_COMMANDER = "commander"
 ZONE_WAVE = "wave"
 
@@ -24,6 +25,7 @@ def create_game_from_deck(
     *,
     name: str,
     legendary_damage_mill_to_phased: bool = False,
+    destroyed_tokens_to_graveyard: bool = False,
 ) -> GameState:
     """Create a fresh game by cloning a deck's card instances."""
     source_cards = [card for card in deck.card_instances if card.game_state_id is None]
@@ -37,10 +39,12 @@ def create_game_from_deck(
         wave_fixed_count=1,
         lands_to_battlefield=False,
         legendary_damage_mill_to_phased=legendary_damage_mill_to_phased,
+        destroyed_tokens_to_graveyard=destroyed_tokens_to_graveyard,
         library_order=[],
         battlefield_ids=[],
         graveyard_ids=[],
         exile_ids=[],
+        vanished_ids=[],
         commander_ids=[],
         wave_pending_ids=[],
     )
@@ -102,30 +106,90 @@ def shuffle_library(session: Session, game: GameState) -> None:
 
 
 def take_turn(session: Session, game: GameState) -> int | None:
-    """Process exactly one card from the top of the library."""
+    """Reveal a Horde turn preview until the first non-token card is found."""
     before = snapshot_game(session, game)
+    if game.wave_pending_ids:
+        return game.wave_pending_ids[0] if game.wave_pending_ids else None
+
     library_order = list(game.library_order or [])
     if not library_order:
         _log_action(session, game, "turn", "Turn clicked but the library is empty.", before)
         return None
 
-    game.turn_number = (game.turn_number or 0) + 1
-    card_id = library_order.pop(0)
+    revealed_ids: list[int] = []
+    while library_order:
+        card_id = library_order.pop(0)
+        card = _card_by_id(game, card_id)
+        move_card(game, card, ZONE_WAVE)
+        revealed_ids.append(card_id)
+        if not card.is_token:
+            break
+
     game.library_order = list(library_order)
-    card = _card_by_id(game, card_id)
-    game.wave_pending_ids = []
-    move_card(game, card, ZONE_BATTLEFIELD)
-    card.rested = True
-    card.tapped = False
-    message = f"Turn {game.turn_number}: {card.card_name} entered the battlefield."
+    _sync_zone_positions(game, game.card_instances)
+    _log_action(
+        session,
+        game,
+        "turn_preview",
+        f"Revealed {len(revealed_ids)} card(s) for the next Horde turn preview.",
+        before,
+    )
+    return revealed_ids[0] if revealed_ids else None
+
+
+def place_pending_turn(session: Session, game: GameState) -> list[int]:
+    """Commit the currently previewed Horde turn onto the battlefield."""
+    if not game.wave_pending_ids:
+        return []
+
+    before = snapshot_game(session, game)
+    pending_ids = list(game.wave_pending_ids or [])
+    game.turn_number = (game.turn_number or 0) + 1
+
+    for card_id in pending_ids:
+        card = _card_by_id(game, card_id)
+        move_card(game, card, ZONE_BATTLEFIELD)
+        card.rested = True
+        card.tapped = False
 
     _sync_zone_positions(game, game.card_instances)
-    _log_action(session, game, "turn", message, before)
-    return card_id
+    _log_action(
+        session,
+        game,
+        "turn_commit",
+        f"Turn {game.turn_number}: placed {len(pending_ids)} revealed card(s) onto the battlefield.",
+        before,
+    )
+    return pending_ids
+
+
+def return_pending_turn(session: Session, game: GameState) -> list[int]:
+    """Put the currently previewed Horde turn back on top of the library in order."""
+    if not game.wave_pending_ids:
+        return []
+
+    before = snapshot_game(session, game)
+    pending_ids = list(game.wave_pending_ids or [])
+
+    for card_id in pending_ids:
+        card = _card_by_id(game, card_id)
+        card.current_zone = ZONE_LIBRARY
+
+    game.wave_pending_ids = []
+    game.library_order = pending_ids + list(game.library_order or [])
+    _sync_zone_positions(game, game.card_instances)
+    _log_action(
+        session,
+        game,
+        "turn_return",
+        f"Returned {len(pending_ids)} revealed card(s) to the top of the library.",
+        before,
+    )
+    return pending_ids
 
 
 def mill_cards(session: Session, game: GameState, count: int, *, from_damage: bool = False) -> list[int]:
-    """Mill cards from the top of the library into the graveyard."""
+    """Mill cards from the top of the library into the graveyard or vanished pile."""
     if count <= 0:
         return []
     before = snapshot_game(session, game)
@@ -140,7 +204,7 @@ def mill_cards(session: Session, game: GameState, count: int, *, from_damage: bo
             card.phased_out = True
             card.rested = True
         else:
-            move_card(game, card, ZONE_GRAVEYARD)
+            move_card(game, card, _resolved_destination(game, card, ZONE_GRAVEYARD))
         milled.append(card_id)
     _sync_zone_positions(game, game.card_instances)
     verb = "Damage milled" if from_damage else "Milled"
@@ -152,11 +216,12 @@ def move_card_to_zone(session: Session, game: GameState, card_id: int, destinati
     """Move a card between visible zones."""
     before = snapshot_game(session, game)
     card = _card_by_id(game, card_id)
-    move_card(game, card, destination)
-    if destination == ZONE_BATTLEFIELD:
+    resolved_destination = _resolved_destination(game, card, destination)
+    move_card(game, card, resolved_destination)
+    if resolved_destination == ZONE_BATTLEFIELD:
         card.rested = True
     _sync_zone_positions(game, game.card_instances)
-    _log_action(session, game, "move_card", f"Moved {card.card_name} to {destination}.", before)
+    _log_action(session, game, "move_card", f"Moved {card.card_name} to {resolved_destination}.", before)
 
 
 def move_card_to_library_bottom(session: Session, game: GameState, card_id: int) -> None:
@@ -233,9 +298,11 @@ def snapshot_game(session: Session | None, game: GameState) -> dict:
             "battlefield_ids": list(game.battlefield_ids or []),
             "graveyard_ids": list(game.graveyard_ids or []),
             "exile_ids": list(game.exile_ids or []),
+            "vanished_ids": list(game.vanished_ids or []),
             "commander_ids": list(game.commander_ids or []),
             "wave_pending_ids": list(game.wave_pending_ids or []),
             "battlefield_note": game.battlefield_note,
+            "destroyed_tokens_to_graveyard": game.destroyed_tokens_to_graveyard,
         },
         "cards": {
             card.id: {
@@ -260,9 +327,11 @@ def restore_snapshot(game: GameState, snapshot: dict) -> None:
     game.battlefield_ids = list(payload.get("battlefield_ids", []) or [])
     game.graveyard_ids = list(payload.get("graveyard_ids", []) or [])
     game.exile_ids = list(payload.get("exile_ids", []) or [])
+    game.vanished_ids = list(payload.get("vanished_ids", []) or [])
     game.commander_ids = list(payload.get("commander_ids", []) or [])
     game.wave_pending_ids = list(payload.get("wave_pending_ids", []) or [])
     game.battlefield_note = payload.get("battlefield_note")
+    game.destroyed_tokens_to_graveyard = bool(payload.get("destroyed_tokens_to_graveyard", False))
     card_payload = snapshot.get("cards", {})
     for card in game.card_instances:
         values = card_payload.get(card.id, {})
@@ -310,7 +379,7 @@ def make_deck_card_instance(deck: DeckDefinition, entry: CardCatalogEntry, copy_
 
 def move_card(game: GameState, card: CardInstance, destination: str, *, to_bottom: bool = False) -> None:
     """Update zone collections and the card zone field."""
-    for zone_list_name in ("library_order", "battlefield_ids", "graveyard_ids", "exile_ids", "commander_ids", "wave_pending_ids"):
+    for zone_list_name in ("library_order", "battlefield_ids", "graveyard_ids", "exile_ids", "vanished_ids", "commander_ids", "wave_pending_ids"):
         zone_list = list(getattr(game, zone_list_name) or [])
         if card.id in zone_list:
             zone_list = [value for value in zone_list if value != card.id]
@@ -327,6 +396,8 @@ def move_card(game: GameState, card: CardInstance, destination: str, *, to_botto
         game.graveyard_ids = list(game.graveyard_ids or []) + [card.id]
     elif destination == ZONE_EXILE:
         game.exile_ids = list(game.exile_ids or []) + [card.id]
+    elif destination == ZONE_VANISHED:
+        game.vanished_ids = list(game.vanished_ids or []) + [card.id]
     elif destination == ZONE_COMMANDER:
         game.commander_ids = list(game.commander_ids or []) + [card.id]
     elif destination == ZONE_WAVE:
@@ -337,7 +408,7 @@ def move_card(game: GameState, card: CardInstance, destination: str, *, to_botto
 
 def _sync_zone_positions(game: GameState, cards: list[CardInstance]) -> None:
     lookup = {card.id: card for card in cards}
-    for zone_name in ("library_order", "battlefield_ids", "graveyard_ids", "exile_ids", "commander_ids", "wave_pending_ids"):
+    for zone_name in ("library_order", "battlefield_ids", "graveyard_ids", "exile_ids", "vanished_ids", "commander_ids", "wave_pending_ids"):
         for position, card_id in enumerate(getattr(game, zone_name) or []):
             lookup[card_id].zone_position = position
 
@@ -347,6 +418,17 @@ def _card_by_id(game: GameState, card_id: int) -> CardInstance:
         if card.id == card_id:
             return card
     raise ValueError(f"Card id {card_id} not found in game")
+
+
+def _resolved_destination(game: GameState, card: CardInstance, destination: str) -> str:
+    """Apply game rules that redirect a requested move into a different zone."""
+    if (
+        destination == ZONE_GRAVEYARD
+        and card.is_token
+        and not game.destroyed_tokens_to_graveyard
+    ):
+        return ZONE_VANISHED
+    return destination
 
 
 def _log_action(session: Session, game: GameState, action_type: str, message: str, before: dict | None = None) -> None:

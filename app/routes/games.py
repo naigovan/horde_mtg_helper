@@ -18,6 +18,8 @@ from app.game_engine import (
     mill_cards,
     move_card_to_library_bottom,
     move_card_to_zone,
+    place_pending_turn,
+    return_pending_turn,
     save_game,
     shuffle_library,
     tap_all,
@@ -35,10 +37,12 @@ templates = Jinja2Templates(directory="app/templates")
 register_template_helpers(templates)
 VISIBLE_ZONE_ORDER = {
     "library": 0,
-    "battlefield": 1,
-    "graveyard": 2,
-    "exile": 3,
-    "commander": 4,
+    "wave": 1,
+    "battlefield": 2,
+    "graveyard": 3,
+    "exile": 4,
+    "vanished": 5,
+    "commander": 6,
 }
 
 
@@ -47,6 +51,7 @@ def create_game(
     deck_id: int,
     name: str = Form("New Game"),
     legendary_damage_mill_to_phased: bool = Form(False),
+    destroyed_tokens_to_graveyard: bool = Form(False),
     session: Session = Depends(get_session),
 ):
     """Create a new game from a deck."""
@@ -60,6 +65,7 @@ def create_game(
         deck,
         name=name,
         legendary_damage_mill_to_phased=legendary_damage_mill_to_phased,
+        destroyed_tokens_to_graveyard=destroyed_tokens_to_graveyard,
     )
     session.commit()
     return RedirectResponse(url=f"/games/{game.id}", status_code=303)
@@ -72,7 +78,9 @@ def view_game(game_id: int, request: Request, session: Session = Depends(get_ses
     battlefield = [card for card in game.card_instances if card.id in game.battlefield_ids]
     graveyard = [card for card in game.card_instances if card.id in game.graveyard_ids]
     exile = [card for card in game.card_instances if card.id in game.exile_ids]
+    vanished = [card for card in game.card_instances if card.id in (game.vanished_ids or [])]
     commander = [card for card in game.card_instances if card.id in (game.commander_ids or [])]
+    wave_pending = [card for card in game.card_instances if card.id in (game.wave_pending_ids or [])]
     battlefield = sorted(battlefield, key=lambda c: c.zone_position)
     battlefield_creatures = [card for card in battlefield if card.is_creature]
     battlefield_noncreatures = [card for card in battlefield if not card.is_creature]
@@ -106,7 +114,9 @@ def view_game(game_id: int, request: Request, session: Session = Depends(get_ses
             "battlefield_noncreature_stacks": battlefield_noncreature_stacks,
             "graveyard": sorted(graveyard, key=lambda c: c.zone_position),
             "exile": sorted(exile, key=lambda c: c.zone_position),
+            "vanished": sorted(vanished, key=lambda c: c.zone_position),
             "commander": sorted(commander, key=lambda c: c.zone_position),
+            "wave_pending": sorted(wave_pending, key=lambda c: c.zone_position),
             "library_tokens": library_tokens,
             "game_view_state": _build_game_view_state(game, battlefield_stack_keys),
         },
@@ -117,6 +127,22 @@ def view_game(game_id: int, request: Request, session: Session = Depends(get_ses
 def take_turn_action(game_id: int, session: Session = Depends(get_session)):
     game = _load_game(session, game_id)
     take_turn(session, game)
+    session.commit()
+    return RedirectResponse(url=f"/games/{game.id}", status_code=303)
+
+
+@router.post("/{game_id}/turn/place")
+def place_pending_turn_action(game_id: int, session: Session = Depends(get_session)):
+    game = _load_game(session, game_id)
+    place_pending_turn(session, game)
+    session.commit()
+    return RedirectResponse(url=f"/games/{game.id}", status_code=303)
+
+
+@router.post("/{game_id}/turn/return")
+def return_pending_turn_action(game_id: int, session: Session = Depends(get_session)):
+    game = _load_game(session, game_id)
+    return_pending_turn(session, game)
     session.commit()
     return RedirectResponse(url=f"/games/{game.id}", status_code=303)
 
@@ -257,7 +283,9 @@ def _build_game_view_state(game: GameState, battlefield_stack_keys: dict[int, st
     battlefield_ids = list(game.battlefield_ids or [])
     graveyard_ids = list(game.graveyard_ids or [])
     exile_ids = list(game.exile_ids or [])
+    vanished_ids = list(game.vanished_ids or [])
     commander_ids = list(game.commander_ids or [])
+    wave_pending_ids = list(game.wave_pending_ids or [])
     cards = sorted(
         game.card_instances,
         key=lambda card: (
@@ -275,16 +303,20 @@ def _build_game_view_state(game: GameState, battlefield_stack_keys: dict[int, st
         "battlefieldNote": game.battlefield_note or "",
         "counts": {
             "library": len(library_ids),
+            "wave": len(wave_pending_ids),
             "battlefield": len(battlefield_ids),
             "graveyard": len(graveyard_ids),
             "exile": len(exile_ids),
+            "vanished": len(vanished_ids),
             "commander": len(commander_ids),
         },
         "zones": {
             "library": library_ids,
+            "wave": wave_pending_ids,
             "battlefield": battlefield_ids,
             "graveyard": graveyard_ids,
             "exile": exile_ids,
+            "vanished": vanished_ids,
             "commander": commander_ids,
         },
         "cards": [

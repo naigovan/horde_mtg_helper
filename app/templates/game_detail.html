@@ -5,7 +5,9 @@
 {% set battlefield_noncreatures = battlefield | rejectattr("is_creature") | list %}
 {% set graveyard_preview = graveyard|last if graveyard else None %}
 {% set exile_preview = exile|last if exile else None %}
+{% set vanished_preview = vanished|last if vanished else None %}
 {% set commander_preview = commander|first if commander else None %}
+{% set wave_preview_stop_card = wave_pending|last if wave_pending else None %}
 <div class="game-page board-page" data-game-page data-game-id="{{ game.id }}">
   <section class="board-topbar card">
     <div class="board-topbar-copy">
@@ -20,6 +22,8 @@
         <span class="board-chip">{{ battlefield|length }} on board</span>
         <span class="board-chip">{{ graveyard|length }} in graveyard</span>
         <span class="board-chip">{{ exile|length }} in exile</span>
+        <span class="board-chip">{{ vanished|length }} vanished</span>
+        {% if wave_pending %}<span class="board-chip board-chip-preview">{{ wave_pending|length }} in turn preview</span>{% endif %}
       </div>
       <div class="board-toolbar board-toolbar-system">
         <a class="button-link board-toolbar-link" href="/decks/{{ game.deck_definition_id }}">Back</a>
@@ -45,6 +49,62 @@
       </div>
     </div>
   </section>
+
+  {% if wave_pending %}
+  <section class="turn-preview-overlay" data-turn-preview>
+    <div class="turn-preview-backdrop"></div>
+    <div class="turn-preview-panel card">
+      <div class="turn-preview-header">
+        <div>
+          <p class="eyebrow">Horde Turn Preview</p>
+          <h2>Reveal until the first non-token</h2>
+          <p class="turn-preview-copy">These cards are queued for this turn. Check the revealed pile, then either place everything onto the battlefield or return it to the top of the library.</p>
+        </div>
+        <span class="zone-pill">{{ wave_pending|length }}</span>
+      </div>
+
+      <div class="turn-preview-card-strip" data-zone-anchor="wave">
+        {% for card in wave_pending %}
+        <article
+          class="turn-preview-card {% if wave_preview_stop_card and wave_preview_stop_card.id == card.id %}is-wave-stop{% endif %}"
+          data-card-id="{{ card.id }}"
+          data-card-name="{{ card.card_name }}"
+          data-card-node="card"
+          data-zone="wave"
+          data-tapped="false"
+          tabindex="0"
+        >
+          <div class="turn-preview-card-art">
+            {% if card.image_url %}
+            <img src="{{ card.image_url }}" alt="{{ card.card_name }}" />
+            {% else %}
+            <div class="turn-preview-card-placeholder"><span>{{ card.card_name[:1] }}</span></div>
+            {% endif %}
+            <span class="turn-preview-card-step">{{ loop.index }}</span>
+            {% if not card.is_token %}
+            <span class="turn-preview-card-stop-badge">Stop</span>
+            {% endif %}
+          </div>
+          <div class="turn-preview-card-copy">
+            <strong>{{ card.card_name }}</strong>
+            <span>{{ card.type_line or "" }}</span>
+            <p>{% if card.is_token %}Token reveal{% else %}First non-token card{% endif %}</p>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+
+      <div class="turn-preview-actions">
+        <form method="post" action="/games/{{ game.id }}/turn/place">
+          <button type="submit">Place On Battlefield</button>
+        </form>
+        <form method="post" action="/games/{{ game.id }}/turn/return">
+          <button type="submit">Return Back</button>
+        </form>
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <section class="board-grid">
     <section class="board-battlefield card" id="battlefield-zone">
@@ -251,9 +311,15 @@
             <strong>{{ game.library_order|length }}</strong>
             <span class="board-zone-hint">Hover for token deploy</span>
           </div>
+          {% if wave_pending %}
+          <div class="board-zone-primary-action">
+            <button type="button" disabled>Preview Open</button>
+          </div>
+          {% else %}
           <form method="post" action="/games/{{ game.id }}/turn" class="board-zone-primary-action">
             <button type="submit">Take Turn</button>
           </form>
+          {% endif %}
         </div>
 
         <div class="zone-hover-panel zone-hover-panel-library">
@@ -365,6 +431,54 @@
                 <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield"><input type="hidden" name="destination" value="battlefield" /><button type="submit">Field</button></form>
                 <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Top</button></form>
                 <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
+                {% if card.is_commander %}
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Cmdr</button></form>
+                {% endif %}
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="board-empty board-empty-mini">Empty</p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="board-zone-card board-zone-mini card" id="vanished-zone" tabindex="0">
+        <div class="board-zone-mini-face" data-zone-anchor="vanished" data-menu-trigger>
+          {% if vanished_preview and vanished_preview.image_url %}
+          <img src="{{ vanished_preview.image_url }}" alt="{{ vanished_preview.card_name }}" class="board-zone-preview" />
+          {% else %}
+          <div class="board-zone-preview board-zone-preview-placeholder"><span>VN</span></div>
+          {% endif %}
+          <div class="board-zone-mini-overlay">
+            <p class="eyebrow">Vanished</p>
+            <strong>{{ vanished|length }}</strong>
+          </div>
+        </div>
+        <div class="zone-hover-panel zone-hover-panel-list">
+          <div class="zone-hover-panel-header">
+            <strong>Vanished</strong>
+            <span>{{ vanished|length }} cards</span>
+          </div>
+          {% if vanished %}
+          <div class="zone-hover-list">
+            {% for card in vanished %}
+            <article class="zone-hover-entry">
+              <div class="zone-hover-entry-copy">
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.card_name }}" class="zone-hover-thumb" />
+                {% endif %}
+                <div>
+                  <strong>{{ card.card_name }}</strong>
+                  <span>{{ card.type_line or "" }}</span>
+                </div>
+              </div>
+              <div class="zone-hover-entry-actions">
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-library-top"><input type="hidden" name="destination" value="library" /><button type="submit">Top</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/library-bottom" data-card-id="{{ card.id }}" data-card-action="move-library-bottom"><button type="submit">Bottom</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-battlefield"><input type="hidden" name="destination" value="battlefield" /><button type="submit">Field</button></form>
+                <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-exile"><input type="hidden" name="destination" value="exile" /><button type="submit">Exile</button></form>
                 {% if card.is_commander %}
                 <form method="post" action="/games/{{ game.id }}/cards/{{ card.id }}/move" data-card-id="{{ card.id }}" data-card-action="move-commander"><input type="hidden" name="destination" value="commander" /><button type="submit">Cmdr</button></form>
                 {% endif %}

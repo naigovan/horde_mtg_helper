@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db import get_session
+from app.db import SessionLocal, get_session
 from app.deck_parser import parse_decklist
 from app.game_engine import make_deck_card_instance
 from app.models import DeckDefinition, GameState
@@ -19,6 +21,19 @@ from app.template_helpers import register_template_helpers
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 register_template_helpers(templates)
+
+
+@dataclass(frozen=True)
+class ResolvedCatalogCard:
+    """Detached card metadata safe to reuse across short-lived sessions."""
+
+    id: int
+    scryfall_id: str
+    name: str
+    image_url: str | None
+    oracle_text: str | None
+    type_line: str | None
+    mana_cost: str | None
 
 
 @router.get("/")
@@ -37,17 +52,22 @@ def create_deck(
 ):
     """Create a saved deck and resolve its cards via Scryfall."""
     try:
-        parsed_items = parse_decklist(decklist_text)
+        clean_name = name.strip() or "Untitled Horde Deck"
+        clean_decklist = decklist_text.strip()
+        clean_commander_name = commander_name.strip()
+        parsed_items, resolved_items, commander_entry = _resolve_deck_blueprint(
+            clean_decklist, clean_commander_name
+        )
         deck = DeckDefinition(
-            name=name.strip() or "Untitled Horde Deck",
-            decklist_text=decklist_text.strip(),
-            commander_name=commander_name.strip() or None,
+            name=clean_name,
+            decklist_text=clean_decklist,
+            commander_name=clean_commander_name or None,
             parsed_items_json=[item.__dict__ for item in parsed_items],
         )
         session.add(deck)
         session.flush()
 
-        _populate_deck_cards(session, deck, decklist_text, commander_name)
+        _populate_deck_cards(session, deck, resolved_items, commander_entry)
 
         session.commit()
         return RedirectResponse(url=f"/decks/{deck.id}", status_code=303)
@@ -110,17 +130,23 @@ def update_deck(
     if not deck:
         raise HTTPException(status_code=404, detail="Deck not found")
     try:
-        deck.name = name.strip() or "Untitled Horde Deck"
-        deck.decklist_text = decklist_text.strip()
-        deck.commander_name = commander_name.strip() or None
-        parsed_items = parse_decklist(deck.decklist_text)
+        clean_name = name.strip() or "Untitled Horde Deck"
+        clean_decklist = decklist_text.strip()
+        clean_commander_name = commander_name.strip()
+        parsed_items, resolved_items, commander_entry = _resolve_deck_blueprint(
+            clean_decklist, clean_commander_name
+        )
+
+        deck.name = clean_name
+        deck.decklist_text = clean_decklist
+        deck.commander_name = clean_commander_name or None
         deck.parsed_items_json = [item.__dict__ for item in parsed_items]
 
         for card in [value for value in deck.card_instances if value.game_state_id is None]:
             session.delete(card)
         session.flush()
 
-        _populate_deck_cards(session, deck, deck.decklist_text, commander_name)
+        _populate_deck_cards(session, deck, resolved_items, commander_entry)
         session.commit()
         return RedirectResponse(url=f"/decks/{deck.id}", status_code=303)
     except Exception as exc:
@@ -151,17 +177,57 @@ def delete_deck(deck_id: int, session: Session = Depends(get_session)):
     return RedirectResponse(url="/", status_code=303)
 
 
-def _populate_deck_cards(session: Session, deck: DeckDefinition, decklist_text: str, commander_name: str) -> None:
-    """Resolve and store base deck cards plus an optional commander."""
+def _resolve_deck_blueprint(
+    decklist_text: str, commander_name: str
+) -> tuple[list, list[tuple[object, ResolvedCatalogCard]], ResolvedCatalogCard | None]:
+    """Resolve deck entries before starting the main deck write transaction."""
     parsed_items = parse_decklist(decklist_text)
-    client = ScryfallClient(session)
-    for item in parsed_items:
-        entry = client.resolve_card(item.card_name)
+    resolved_by_name: dict[str, ResolvedCatalogCard] = {}
+
+    def resolve_once(card_name: str) -> ResolvedCatalogCard:
+        key = card_name.strip().casefold()
+        if key not in resolved_by_name:
+            resolved_by_name[key] = _resolve_catalog_card(card_name)
+        return resolved_by_name[key]
+
+    resolved_items = [(item, resolve_once(item.card_name)) for item in parsed_items]
+    commander_entry = resolve_once(commander_name) if commander_name.strip() else None
+    return parsed_items, resolved_items, commander_entry
+
+
+def _resolve_catalog_card(card_name: str) -> ResolvedCatalogCard:
+    """Resolve one card using a short-lived session so SQLite locks are brief."""
+    with SessionLocal() as lookup_session:
+        client = ScryfallClient(lookup_session)
+        try:
+            entry = client.resolve_card(card_name)
+            lookup_session.commit()
+        except Exception:
+            lookup_session.rollback()
+            raise
+        return ResolvedCatalogCard(
+            id=entry.id,
+            scryfall_id=entry.scryfall_id,
+            name=entry.name,
+            image_url=entry.image_url,
+            oracle_text=entry.oracle_text,
+            type_line=entry.type_line,
+            mana_cost=entry.mana_cost,
+        )
+
+
+def _populate_deck_cards(
+    session: Session,
+    deck: DeckDefinition,
+    resolved_items: list[tuple[object, ResolvedCatalogCard]],
+    commander_entry: ResolvedCatalogCard | None,
+) -> None:
+    """Store base deck cards plus an optional commander from pre-resolved metadata."""
+    for item, entry in resolved_items:
         for copy_number in range(1, item.quantity + 1):
             session.add(make_deck_card_instance(deck, entry, copy_number))
 
-    if commander_name.strip():
-        commander_entry = client.resolve_card(commander_name.strip())
+    if commander_entry:
         commander = make_deck_card_instance(deck, commander_entry, 1)
         commander.is_commander = True
         commander.current_zone = "commander"

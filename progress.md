@@ -218,6 +218,24 @@ Original prompt: Build and iterate a playable web game in this workspace, valida
 - Root cause: the responsive rule at `@media (max-width: 1360px)` was forcing `.board-grid` to a single column (`grid-template-columns: 1fr`), which made `.board-sidebar` expand to full width and masked desktop/tablet width tweaks.
 - Updated `app/static/styles.css` to enforce a strict sidebar track using a CSS variable and fixed sizing:
   - `.board-grid` now defines `--board-sidebar-width` and uses `grid-template-columns: var(--board-sidebar-width) minmax(0, 1fr)`.
+
+2026-03-28
+- User reported deck creation failing with `(sqlite3.OperationalError) database is locked` while saving a TMNT Horde deck.
+- Root cause in `app/routes/decks.py`: the request session started writing `deck_definitions` / `card_instances` too early and used the same SQLite transaction during Scryfall resolution work.
+- Refactored deck save/update flow so Scryfall resolution happens first through short-lived `SessionLocal()` lookups, then the actual deck write transaction starts only for the final `DeckDefinition` + `CardInstance` insert pass.
+- Hardened SQLite setup in `app/db.py` with a longer busy timeout plus `PRAGMA journal_mode=WAL`, `busy_timeout=30000`, and `synchronous=NORMAL` to reduce reader/writer lock contention.
+- While validating the exact user deck, found a second real blocker after the DB-lock fix: `Ninja (TTMT)` failed Scryfall named lookup even though it is a valid set-specific token printing.
+- Updated `app/scryfall_client.py` so names in `Card Name (SET)` format first try an exact-name, exact-set Scryfall search; this resolves set-specific printings and tokens like `Ninja (TTMT)` correctly before falling back to generic fuzzy lookup.
+- Added focused tests in `tests/test_decks.py` and `tests/test_scryfall_client.py` for:
+  - pre-resolving deck metadata before writes,
+  - commander/cache reuse in the deck blueprint,
+  - exact-set token resolution (`Ninja (TTMT)`),
+  - cached exact-set printing reuse.
+- Validation:
+  - `PYTHONPATH=. pytest -q` passed with `23 passed`.
+  - Live app validation on `http://127.0.0.1:8010` successfully created the exact `Shredder and Foot` deck from the user-provided list with a `303` redirect to `/decks/3`.
+  - Browser screenshot check in `output/deck-parse-lock-fix-shared/shot-0.png` shows the saved deck detail page loading normally.
+  - DB report in `output/deck-parse-lock-fix/report.json` confirms `baseCardCount: 100`, `ninjaCount: 30`, and `allNinjasAreTokens: true`.
   - `.board-sidebar` now has explicit `width`, `min-width`, and `max-width` all bound to `--board-sidebar-width`, plus `justify-self: start`.
   - `.board-battlefield.card` and direct sidebar children now include `min-width: 0` to prevent content-driven overflow from widening tracks.
 - Updated responsive behavior:
@@ -285,3 +303,91 @@ Original prompt: Build and iterate a playable web game in this workspace, valida
   - Direct page captures saved to `output/app-shell-pages/home.png`, `output/app-shell-pages/deck-detail.png`, and `output/app-shell-pages/deck-edit.png`.
   - `output/app-shell-pages/report.json` confirms all three pages rendered the new hero shell successfully (`heroExists: true`) with no console/page errors.
 - Regression check: `PYTHONPATH=. pytest -q` passed with `13 passed`.
+
+- Started branch `codex/horde_logic` for actual rules work.
+- First rules pass: changed the Horde turn flow from “move the top card straight to the battlefield” to a two-step reveal preview:
+  - clicking `Take Turn` now reveals cards from the library into `wave_pending_ids` until the first non-token card is found, inclusive
+  - revealed cards stay out of the battlefield until explicitly confirmed
+  - new `Place On Battlefield` action commits the pending reveal, moves all previewed cards onto the battlefield, and advances the turn counter
+  - new `Return Back` action restores the previewed cards to the top of the library in the same order and clears the pending reveal
+- Updated `app/routes/games.py` and `app/templates/game_detail.html` to render the pending turn as a centered popup field with readable revealed cards, a visible stop marker on the first non-token card, and confirm/cancel controls.
+- Updated `app/static/app.js` so:
+  - `render_game_to_text` now includes `wavePending`
+  - preview cards are treated as visible card nodes for transition purposes
+  - preview -> battlefield and preview -> library transitions animate from the popup instead of from a generic zone anchor
+- Updated `app/static/styles.css` with dedicated turn-preview overlay/panel/card styling that matches the tabletop UI without reintroducing the old full-page blur blocker.
+- Updated unit coverage in `tests/test_game_engine.py` for:
+  - reveal-until-first-non-token behavior
+  - placing a pending turn onto the battlefield
+  - returning a pending turn to the top of the library in order
+- Validation on local server port `8006`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game4-shared-turn-preview/`.
+  - Controlled browser validation on temporary game 5 produced:
+    - `output/game5-turn-preview-check/preview-open.png`
+    - `output/game5-turn-preview-check/returned.png`
+    - `output/game5-turn-preview-check/placed.png`
+    - `output/game5-turn-preview-check/report.json`
+  - The controlled report confirms the exact intended flow:
+    - before preview: library `300`, battlefield `0`, wave `0`
+    - after preview: library `297`, battlefield `0`, wave `3`, revealed names `Zombie // Zombie`, `Zombie // Zombie`, `Corpse Knight`
+    - after return: library back to `300`, wave back to `0`
+    - after place: turn advanced `1 -> 2`, battlefield `0 -> 3`, wave back to `0`
+  - Additional settled visual check on temporary game 6 saved to `output/game6-turn-preview-settled.png` confirms the popup is readable after the transition finishes.
+- Regression check: `PYTHONPATH=. pytest -q` passed with `14 passed`.
+
+- Next rules pass: added optional token-destruction handling with a new `vanished` pile.
+- Data/model changes:
+  - `app/models.py` now stores `destroyed_tokens_to_graveyard` (default `False`) and `vanished_ids` on each `GameState`.
+  - `app/db.py` migration path adds those columns for existing SQLite databases.
+- Engine changes in `app/game_engine.py`:
+  - introduced `ZONE_VANISHED`
+  - `create_game_from_deck(...)` now accepts and stores the per-game `destroyed_tokens_to_graveyard` option
+  - battlefield tokens sent to `graveyard` now redirect to `vanished` by default through `_resolved_destination(...)`
+  - if `destroyed_tokens_to_graveyard` is enabled, destroyed tokens keep going to graveyard as before
+  - snapshots / undo now preserve both the new setting and the vanished zone
+- Route/template changes:
+  - `app/routes/games.py` now exposes `vanished` in both the rendered page context and `game_view_state`
+  - `app/templates/game_detail.html` now shows a standalone `Vanished` pile below `Exile` and above `Commander`
+  - `Vanished` uses the same interaction model as graveyard for `Top`, `Bottom`, `Field`, and `Exile`
+  - top metrics now include the vanished count
+  - `app/templates/deck_detail.html` now includes a launch option: `Destroyed tokens go to graveyard instead of vanished`
+- Frontend state updates:
+  - `app/static/app.js` now includes `vanished` in `render_game_to_text` summaries so browser validation can assert the new zone cleanly
+- Unit coverage:
+  - added tests for default token destruction -> vanished
+  - added tests for opt-in token destruction -> graveyard
+  - added a test that newly created games default to vanished-mode token handling
+- Validation on local server port `8007`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game4-shared-vanished/`.
+  - Default-path screenshots:
+    - `output/game8-vanished-default/default-destroyed.png`
+    - `output/game8-vanished-default/report.json`
+    - report confirms default destroy changes counts from `vanished: 0 -> 1` while graveyard stays `0`, with latest action `Moved Zombie // Zombie to vanished.`
+  - Additional default-path follow-up on temporary game 6:
+    - `output/game6-vanished-check/default-top-library.png`
+    - `output/game6-vanished-check/default-preview-again.png`
+    - `output/game6-vanished-check/followup.json`
+    - follow-up confirms `Top` from `Vanished` returns the token to library and it shows up again in the next turn preview
+  - Opt-in path screenshot:
+    - `output/game6-vanished-check/opt-in-graveyard.png`
+    - `output/game6-vanished-check/followup.json`
+    - follow-up confirms opt-in mode destroys the same token to graveyard (`graveyard: 1`, `vanished: 0`)
+- Regression check: `PYTHONPATH=. pytest -q` passed with `17 passed`.
+
+- User follow-up: when the graveyard option is off, tokens should never go to graveyard at all, including mill effects.
+- Engine follow-up:
+  - broadened `_resolved_destination(...)` in `app/game_engine.py` so any token headed for `graveyard` redirects to `vanished` when `destroyed_tokens_to_graveyard` is disabled, regardless of source zone
+  - updated `mill_cards(...)` to use the same redirect path instead of writing directly to graveyard
+- Unit coverage follow-up in `tests/test_game_engine.py`:
+  - added default `mill -> vanished` token test
+  - added opt-in `mill -> graveyard` token test
+- Validation on local server port `8008`:
+  - Shared `$develop-web-game` client re-check succeeded at `output/game5-shared-vanished-mill/`.
+  - Direct browser mill validation saved to:
+    - `output/game5-vanished-mill-check/default-after-mill.png`
+    - `output/game5-vanished-mill-check/opt-in-after-mill.png`
+    - `output/game5-vanished-mill-check/report.json`
+  - The report confirms the exact intended behavior:
+    - default mode after `Mill 1`: `library 300 -> 299`, `vanished 0 -> 1`, `graveyard stays 0`
+    - opt-in mode after `Mill 1`: `library 300 -> 299`, `graveyard 0 -> 1`, `vanished stays 0`
+- Regression check: `PYTHONPATH=. pytest -q` passed with `19 passed`.

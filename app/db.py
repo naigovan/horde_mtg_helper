@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -18,8 +18,24 @@ class Base(DeclarativeBase):
     """Base declarative class for SQLAlchemy models."""
 
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+sqlite_connect_args = {"check_same_thread": False}
+if DATABASE_URL.startswith("sqlite"):
+    sqlite_connect_args["timeout"] = 30
+
+engine = create_engine(DATABASE_URL, connect_args=sqlite_connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def configure_sqlite(dbapi_connection, _connection_record) -> None:
+        """Use SQLite settings that reduce reader/writer lock contention."""
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 
 def run_migrations() -> None:
@@ -42,6 +58,10 @@ def run_migrations() -> None:
                 connection.execute(text("ALTER TABLE game_states ADD COLUMN commander_ids JSON"))
             if "battlefield_note" not in game_columns:
                 connection.execute(text("ALTER TABLE game_states ADD COLUMN battlefield_note TEXT"))
+            if "destroyed_tokens_to_graveyard" not in game_columns:
+                connection.execute(text("ALTER TABLE game_states ADD COLUMN destroyed_tokens_to_graveyard BOOLEAN DEFAULT 0"))
+            if "vanished_ids" not in game_columns:
+                connection.execute(text("ALTER TABLE game_states ADD COLUMN vanished_ids JSON"))
 
 
 def get_session() -> Session:

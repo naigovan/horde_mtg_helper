@@ -51,9 +51,11 @@ function summarizeGameState(state) {
   }
 
   const zoneCards = {
+    wave: [],
     battlefield: [],
     graveyard: [],
     exile: [],
+    vanished: [],
     commander: [],
   };
   const battlefieldStacks = new Map();
@@ -95,10 +97,12 @@ function summarizeGameState(state) {
     latestAction: state.latestAction,
     battlefieldNote: liveBattlefieldNote || state.battlefieldNote || "",
     counts: state.counts,
+    wavePending: zoneCards.wave,
     battlefield: zoneCards.battlefield,
     battlefieldStacks: Array.from(battlefieldStacks.values()),
     graveyard: zoneCards.graveyard,
     exile: zoneCards.exile,
+    vanished: zoneCards.vanished,
     commander: zoneCards.commander,
   };
 }
@@ -820,7 +824,7 @@ function animateGameTransition(previousLayout, previousState, nextState, actionM
       animateElementFromRect(nextSnapshot.element, previousSnapshot.rect);
       animateStackCountChange(nextSnapshot.element, previousSnapshot.stackCount, nextSnapshot.stackCount);
     } else if (previousCard) {
-      const previousVisibleSnapshot = previousCard.zone === "battlefield" ? getSnapshotForCard(previousLayout, previousCard) : null;
+      const previousVisibleSnapshot = getSnapshotForCard(previousLayout, previousCard);
       const sourceAnchor = previousLayout.anchors.get(previousCard.zone);
       if (previousVisibleSnapshot) {
         animateElementFromRect(nextSnapshot.element, previousVisibleSnapshot.rect);
@@ -867,12 +871,12 @@ function animateGameTransition(previousLayout, previousState, nextState, actionM
     const previousLayoutKey = getLayoutKeyForCard(previousCard);
 
     if (zoneChanged) {
-      if (previousCard.zone === "battlefield" && previousSnapshot && nextAnchor) {
+      if (previousSnapshot && nextAnchor && !(nextCard.zone === "battlefield" && nextSnapshot)) {
         animateGhostFromRect(previousSnapshot.element, previousSnapshot.rect, nextAnchor.rect);
       }
 
       if (
-        previousCard.zone !== "battlefield" &&
+        !previousSnapshot &&
         nextCard.zone === "battlefield" &&
         nextSnapshot &&
         previousAnchor &&

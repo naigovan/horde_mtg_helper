@@ -1971,6 +1971,171 @@ select {
   border-color: rgba(233, 207, 151, 0.18);
 }
 
+.board-chip-preview {
+  background: rgba(98, 70, 30, 0.54);
+  border-color: rgba(255, 207, 129, 0.24);
+}
+
+.turn-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 620;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.turn-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 9, 10, 0.62);
+}
+
+.turn-preview-panel {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, calc(100vw - 3rem));
+  margin: 0;
+  padding: 1.35rem;
+  background:
+    radial-gradient(circle at top left, rgba(255, 202, 107, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(18, 38, 35, 0.98), rgba(6, 12, 12, 0.99));
+  border-color: rgba(233, 207, 151, 0.16);
+  box-shadow: 0 38px 90px rgba(0, 0, 0, 0.58);
+}
+
+.turn-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.turn-preview-header h2 {
+  margin: 0.24rem 0 0;
+  font-size: clamp(1.55rem, 2.3vw, 2.2rem);
+  color: #fbf4ea;
+}
+
+.turn-preview-copy {
+  margin: 0.65rem 0 0;
+  max-width: 42rem;
+  color: rgba(241, 231, 223, 0.74);
+  line-height: 1.5;
+}
+
+.turn-preview-card-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(180px, 220px);
+  gap: 1rem;
+  margin-top: 1.15rem;
+  padding-bottom: 0.35rem;
+  overflow-x: auto;
+}
+
+.turn-preview-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(233, 207, 151, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 238, 0.08), rgba(255, 250, 238, 0.03)),
+    rgba(7, 14, 15, 0.72);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.28);
+}
+
+.turn-preview-card.is-wave-stop {
+  border-color: rgba(255, 207, 129, 0.28);
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(255, 207, 129, 0.08);
+}
+
+.turn-preview-card-art {
+  position: relative;
+  aspect-ratio: 0.715;
+  padding: 0.75rem 0.75rem 0 0.75rem;
+}
+
+.turn-preview-card-art img,
+.turn-preview-card-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  object-fit: cover;
+}
+
+.turn-preview-card-placeholder {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at top, rgba(255, 202, 107, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(20, 42, 38, 0.96), rgba(6, 11, 12, 0.98));
+  color: #fbf4ea;
+  font-size: 3rem;
+}
+
+.turn-preview-card-step,
+.turn-preview-card-stop-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.turn-preview-card-step {
+  top: 1.25rem;
+  left: 1.25rem;
+  background: rgba(9, 18, 17, 0.86);
+  color: rgba(250, 244, 237, 0.92);
+}
+
+.turn-preview-card-stop-badge {
+  right: 1.25rem;
+  bottom: 0.75rem;
+  background: rgba(128, 74, 42, 0.94);
+  color: #fff7e9;
+}
+
+.turn-preview-card-copy {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.95rem 1rem 1rem;
+}
+
+.turn-preview-card-copy strong {
+  color: #faf3e9;
+  font-size: 1rem;
+}
+
+.turn-preview-card-copy span,
+.turn-preview-card-copy p {
+  margin: 0;
+  color: rgba(241, 231, 223, 0.68);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.turn-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.1rem;
+}
+
+.turn-preview-actions form {
+  margin: 0;
+}
+
+.turn-preview-actions button {
+  min-width: 10.75rem;
+}
+
 .zone-panel-root {
   position: fixed;
   inset: 0;
